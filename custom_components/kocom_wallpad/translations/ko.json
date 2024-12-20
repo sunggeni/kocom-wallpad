@@ -1,0 +1,20 @@
+{
+    "title": "코콤 월패드",
+    "config": {
+        "step": {
+            "user": {
+                "description": "장치의 주소와 포트를 입력하세요.",
+                "data": {
+                    "host": "호스트",
+                    "port": "포트"
+                }
+            }
+        },
+        "abort": {
+            "single_instance_allowed": "단일 구성만 허용됩니다."
+        },
+        "error": {
+            "cannot_connect": "연결할 수 없습니다."
+        }
+    }
+}

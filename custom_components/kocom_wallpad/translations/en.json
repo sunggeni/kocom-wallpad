@@ -1,0 +1,20 @@
+{
+    "title": "Kocom WallPad",
+    "config": {
+        "step": {
+            "user": {
+                "description": "Enter the device's address and port.",
+                "data": {
+                    "host": "Host",
+                    "port": "Port"
+                }
+            }
+        },
+        "abort": {
+            "single_instance_allowed": "Only a single configuration is allowed."
+        },
+        "error": {
+            "cannot_connect": "Failed to connect."
+        }
+    }
+}
