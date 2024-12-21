@@ -163,3 +163,15 @@ cython_debug/
 
 # Develop or Testing
 /tests/parse.py
+
+# Mac OS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.fseventsd
