@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .pywallpad.const import STATE, ERROR_CODE
-from .pywallpad.packet import KocomPacket, ThermostatPacket
+from .pywallpad.packet import KocomPacket, ThermostatPacket, FanPacket
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -32,7 +32,7 @@ async def async_setup_entry(
     @callback
     def async_add_binary_sensor(packet: KocomPacket) -> None:
         """Add new binary sensor entity."""
-        if isinstance(packet, ThermostatPacket):
+        if isinstance(packet, (ThermostatPacket, FanPacket)):
             async_add_entities([KocomBinarySensorEntity(gateway, packet)])
         else:
             LOGGER.warning(f"Unsupported packet type: {packet}")

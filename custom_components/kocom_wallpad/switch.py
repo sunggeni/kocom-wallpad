@@ -68,10 +68,10 @@ class KocomSwitchEntity(KocomEntity, SwitchEntity):
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on switch."""
-        packet = self.packet.make_status(True)
+        packet = self.packet.make_status(power=True)
         await self.send(packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off switch."""
-        packet = self.packet.make_status(False)
+        packet = self.packet.make_status(power=False)
         await self.send(packet)

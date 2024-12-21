@@ -28,3 +28,5 @@ CO2 = "co2"
 VOC = "voc"
 TEMPERATURE = "temperature"
 HUMIDITY = "humidity"
+
+TIME = "time"

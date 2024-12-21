@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.light import LightEntity, ColorMode
+from homeassistant.components.light import LightEntity, ColorMode, ATTR_BRIGHTNESS
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -12,7 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .pywallpad.const import POWER, BRIGHTNESS
+from .pywallpad.const import POWER, BRIGHTNESS, LEVEL
 from .pywallpad.packet import KocomPacket, LightPacket
 
 from .gateway import KocomGateway
@@ -57,27 +57,45 @@ class KocomLightEntity(KocomEntity, LightEntity):
     ) -> None:
         """Initialize the light."""
         super().__init__(gateway, packet)
-
-        if self.device.state.get(BRIGHTNESS):
-            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-            self._attr_color_mode = ColorMode.BRIGHTNESS
+        self.has_brightness = False
+        self.max_brightness = 0
 
     @property
     def is_on(self) -> bool:
         """Return true if light is on."""
+        if self.device.state.get(BRIGHTNESS):
+            self.has_brightness = True
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+            self._attr_color_mode = ColorMode.BRIGHTNESS
+            self.max_brightness = len(self.device.state[LEVEL]) + 1
+
         return self.device.state[POWER]
     
     @property
     def brightness(self) -> int:
         """Return the brightness of this light between 0..255."""
-        return self.device.state[BRIGHTNESS]
+        if self.device.state[BRIGHTNESS] not in self.device.state[LEVEL]:
+            return 255
+        return ((225 // self.max_brightness) * self.device.state[BRIGHTNESS]) + 1
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
-        packet = self.packet.make_status(True)
+        if self.has_brightness:
+            brightness = kwargs.get(ATTR_BRIGHTNESS)
+            if brightness is None:
+                LOGGER.warning("Brightness not set")
+                return
+            
+            brightness = ((brightness * 3) // 225) + 1
+            if brightness not in self.device.state[LEVEL]:
+                brightness = 255
+            packet = self.packet.make_status(brightness=brightness)
+        else:
+            packet = self.packet.make_status(power=True)
+
         await self.send(packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
-        packet = self.packet.make_status(False)
+        packet = self.packet.make_status(power=False)
         await self.send(packet)

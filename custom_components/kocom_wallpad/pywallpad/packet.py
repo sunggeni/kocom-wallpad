@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from copy import deepcopy
 from dataclasses import dataclass, field
+import time
 
 from .const import (
     _LOGGER,
@@ -28,6 +29,7 @@ from .const import (
     VOC,
     TEMPERATURE,
     HUMIDITY,
+    TIME,
 )
 from .crc import verify_checksum, calculate_checksum
 from .enums import (
@@ -145,8 +147,11 @@ class LightPacket(KocomPacket):
 
             if power_state and i not in self.valid_light_indices[self.room_id]:
                 self.valid_light_indices[self.room_id][i] = []
-
-            if brightness > 0 and brightness not in self.valid_light_indices[self.room_id][i]:
+            
+            if (brightness > 0 and 
+                i in self.valid_light_indices[self.room_id] and
+                brightness not in self.valid_light_indices[self.room_id][i]
+            ):
                 self.valid_light_indices[self.room_id][i].append(brightness)
                 self.valid_light_indices[self.room_id][i].sort()
                 _LOGGER.debug(
@@ -178,11 +183,17 @@ class LightPacket(KocomPacket):
         """Make a scan packet."""
         return super().make_packet(Command.SCAN)
     
-    def make_status(self, power: bool) -> None:
+    def make_status(self, **kwargs) -> None:
         """Make a status packet."""
         values = {}
-        if power and (sub_id := self._device.sub_id):
-            values[int(sub_id)] = 0xff
+        control_mode, control = next(iter(kwargs.items()))
+        sub_id = self._device.sub_id
+        if control_mode == POWER and sub_id:
+            values[int(sub_id)] = 0xff if control else 0x00
+        elif control_mode == BRIGHTNESS and sub_id:
+            values[int(sub_id)] = control
+        else:
+            raise ValueError(f"Invalid control mode: {control_mode}")
 
         return super().make_packet(Command.STATUS, values)
 
@@ -225,11 +236,14 @@ class OutletPacket(KocomPacket):
         """Make a scan packet."""
         return super().make_packet(Command.SCAN)
     
-    def make_status(self, power: bool) -> None:
+    def make_status(self, **kwargs) -> None:
         """Make a status packet."""
         values = {}
-        if power and (sub_id := self._device.sub_id):
-            values[int(sub_id)] = 0xff
+        control_mode, control = next(iter(kwargs.items()))
+        if control_mode == POWER and (sub_id := self._device.sub_id):
+            values[int(sub_id)] = 0xff if control else 0x00
+        else:
+            raise ValueError(f"Invalid control mode: {control_mode}")
 
         return super().make_packet(Command.STATUS, values)
     
@@ -393,7 +407,8 @@ class FanPacket(KocomPacket):
         vent_mode = VentMode(self.value[1])
         fan_speed = FanSpeed(self.value[2])
         co2_state = int(''.join(self.value[4:6]), 16)
-
+        error_code = int(self.value[6], 16)
+        
         devices.append(
             Device(
                 device_type=self.name,
@@ -402,7 +417,15 @@ class FanPacket(KocomPacket):
                 state={POWER: power_state, VENT_MODE: vent_mode, FAN_SPEED: fan_speed}
             )
         )
-
+        devices.append(
+            Device(
+                device_type=self.name,
+                device_id=self.device_id,
+                state={STATE: error_code != 0, ERROR_CODE: error_code},
+                sub_id="error",
+            )
+        )
+        
         if co2_sensor or self.co2_supported:
             _LOGGER.debug(f"Supports CO2 sensor in fan.")
             self.co2_supported = True
@@ -490,8 +513,27 @@ class GasPacket(KocomPacket):
     
     def make_status(self, power: bool) -> None:
         """Make a status packet."""
-        return super().make_packet(Command.OFF)
+        if not power:
+            return super().make_packet(Command.OFF)
+        else:
+            _LOGGER.debug("Supports gas valve lock only.")
     
+
+class MotionPacket(KocomPacket):
+    """Handles packets for motion devices."""
+
+    def parse_data(self) -> list[Device]:
+        """Parse motion-specific data."""
+        detect_state = self.command == Command.DETECT
+        detect_time = time.time()
+        device = Device(
+            device_type=self.name,
+            room_id=self.room_id,
+            device_id=self.device_id,
+            state={STATE: detect_state, TIME: detect_time},
+        )
+        return [device]
+
 
 class PacketParser:
     """Parses raw Kocom packets into specific classes."""
@@ -531,6 +573,7 @@ class PacketParser:
             DeviceType.FAN.value: FanPacket,
             DeviceType.IAQ.value: IAQPacket,
             DeviceType.GAS.value: GasPacket,
+            DeviceType.MOTION.value: MotionPacket,
             DeviceType.WALLPAD.value: KocomPacket,
         }
         packet_class = packet_class_map.get(device_type)

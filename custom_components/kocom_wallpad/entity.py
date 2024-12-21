@@ -68,7 +68,7 @@ class KocomEntity(RestoreEntity):
             identifiers={(DOMAIN, f"{self.gateway.host}_{self.device.device_type}")},
             manufacturer=MANUFACTURER,
             model=MODEL,
-            name=f"{BRAND_NAME} {self.device.device_type}",
+            name=f"{BRAND_NAME.title()} {self.device.device_type}",
             sw_version=SW_VERSION,
             via_device=(DOMAIN, self.gateway.host),
         )
