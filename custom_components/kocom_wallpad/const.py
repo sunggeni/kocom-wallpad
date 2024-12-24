@@ -25,7 +25,7 @@ DEFAULT_PORT = 8899
 BRAND_NAME = "kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.0.1"
+SW_VERSION = "1.0.2"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
