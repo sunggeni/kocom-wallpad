@@ -14,7 +14,12 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .pywallpad.const import POWER
 from .pywallpad.enums import DeviceType
-from .pywallpad.packet import KocomPacket, OutletPacket, GasPacket
+from .pywallpad.packet import (
+    KocomPacket,
+    OutletPacket,
+    GasPacket,
+    EvPacket,
+)
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -32,7 +37,7 @@ async def async_setup_entry(
     @callback
     def async_add_switch(packet: KocomPacket) -> None:
         """Add new switch entity."""
-        if isinstance(packet, (OutletPacket, GasPacket)):
+        if isinstance(packet, (OutletPacket, GasPacket, EvPacket)):
             async_add_entities([KocomSwitchEntity(gateway, packet)])
         else:
             LOGGER.warning(f"Unsupported packet type: {packet}")

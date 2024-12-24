@@ -58,3 +58,9 @@ class FanSpeed(Enum):
     MEDIUM = "80"
     HIGH = "c0"
     
+class EvDirection(Enum):
+    """EV directions."""
+    IDLE = "00"
+    DOWN = "01"
+    UP = "02"
+    ARRIVAL = "03"

@@ -30,7 +30,12 @@ from .pywallpad.const import (
     TEMPERATURE,
     HUMIDITY,
 )
-from .pywallpad.packet import KocomPacket, FanPacket, IAQPacket
+from .pywallpad.packet import (
+    KocomPacket,
+    FanPacket,
+    IAQPacket,
+    EvPacket,
+)
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -50,6 +55,8 @@ async def async_setup_entry(
         """Add new sensor entity."""
         if isinstance(packet, (FanPacket, IAQPacket)):
             async_add_entities([KocomSensorEntity(gateway, packet)])
+        elif isinstance(packet, EvPacket):
+            async_add_entities([KocomEvEntity(gateway, packet)])
         else:
             LOGGER.warning(f"Unsupported packet type: {packet}")
     
@@ -115,4 +122,21 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
     def state_class(self) -> SensorStateClass:
         """Return the state class of the sensor."""
         return SensorStateClass.MEASUREMENT
+    
+
+class KocomEvEntity(KocomEntity, SensorEntity):
+    """Representation of a Kocom EV sensor."""
+
+    def __init__(
+        self,
+        gateway: KocomGateway,
+        packet: KocomPacket,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(gateway, packet)
+
+    @property
+    def native_value(self) -> int:
+        """Return the state of the sensor."""
+        return self.device.state[STATE]
     

@@ -10,6 +10,8 @@ from .pywallpad.packet import (
     FanPacket,
     IAQPacket,
     GasPacket,
+    MotionPacket,
+    EvPacket,
 )
 
 from homeassistant.const import Platform
@@ -38,4 +40,6 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
     FanPacket: Platform.FAN,
     IAQPacket: Platform.SENSOR,
     GasPacket: Platform.SWITCH,
+    MotionPacket: Platform.BINARY_SENSOR,
+    EvPacket: Platform.SWITCH,
 }

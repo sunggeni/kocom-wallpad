@@ -15,6 +15,7 @@ from .pywallpad.packet import (
     KocomPacket,
     ThermostatPacket,
     FanPacket,
+    EvPacket,
     PacketParser,
 )
 
@@ -112,12 +113,16 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        if isinstance(packet, (ThermostatPacket, FanPacket)) and (sub_id := packet._device.sub_id):
+        if isinstance(
+            packet, (ThermostatPacket, FanPacket, EvPacket)
+        ) and (sub_id := packet._device.sub_id):
             if "error" in sub_id:
                 platform = Platform.BINARY_SENSOR
             elif "temperature" in sub_id:
                 platform = Platform.SENSOR
             elif "co2" in sub_id:
+                platform = Platform.SENSOR
+            elif "direction" in sub_id:
                 platform = Platform.SENSOR
                 
         return platform

@@ -40,6 +40,7 @@ from .enums import (
     FanMode,   # AC
     VentMode,  # Fan
     FanSpeed,  # Fan
+    EvDirection,
 )
 
 
@@ -104,9 +105,14 @@ class KocomPacket:
     def make_packet(self, command: Command, values: dict[int, int] = None) -> bytearray:
         """Generate a packet."""
         packet = bytearray([0xaa, 0x55, 0x30, 0xbc, 0x00])
-    
-        packet.extend(int(x, 16) for x in self.src)
-        packet.extend(int(x, 16) for x in self.dest)
+        
+        if self.device_type == DeviceType.EV:
+            packet.extend(int(x, 16) for x in self.dest)
+            packet.extend(int(x, 16) for x in self.src)
+        else:
+            packet.extend(int(x, 16) for x in self.src)
+            packet.extend(int(x, 16) for x in self.dest)
+        
         packet.append(int(command.value, 16))
         packet.extend([0x00] * 8)
         
@@ -456,6 +462,7 @@ class FanPacket(KocomPacket):
             values[1] = int(control.value, 16)
         elif control_mode == FAN_SPEED:
             values[0] = 0x00 if control == FanSpeed.OFF else 0x11
+            values[1] = 0x01
             values[2] = int(control.value, 16)
         else:
             raise ValueError(f"Unsupported control mode: {control_mode}")
@@ -535,6 +542,49 @@ class MotionPacket(KocomPacket):
         return [device]
 
 
+class EvPacket(KocomPacket):
+    """Handles packets for EV devices."""
+    floor_supported = False
+
+    def parse_data(self) -> list[Device]:
+        """Parse EV-specific data."""
+        devices: list[Device] = []
+
+        power_state = False
+        ev_direction = EvDirection(self.value[0])
+        ev_floor = ""
+
+        devices.append(
+            Device(
+                device_type=self.name,
+                room_id=self.room_id,
+                device_id=self.device_id,
+                state={POWER: power_state},
+            )
+        )
+        devices.append(
+            Device(
+                device_type=self.name,
+                room_id=self.room_id,
+                device_id=self.device_id,
+                state={STATE: ev_direction.name},
+                sub_id="direction",
+            )
+        )
+        return devices
+
+    def make_scan(self) -> None:
+        """Make a scan packet."""
+        return super().make_packet(Command.SCAN)
+
+    def make_status(self, power: bool) -> None:
+        """Make a status packet."""
+        if power:
+            return super().make_packet(Command.ON)
+        else:
+            _LOGGER.debug("Supports EV call only.")
+        
+
 class PacketParser:
     """Parses raw Kocom packets into specific classes."""
 
@@ -574,6 +624,7 @@ class PacketParser:
             DeviceType.IAQ.value: IAQPacket,
             DeviceType.GAS.value: GasPacket,
             DeviceType.MOTION.value: MotionPacket,
+            DeviceType.EV.value: EvPacket,
             DeviceType.WALLPAD.value: KocomPacket,
         }
         packet_class = packet_class_map.get(device_type)
