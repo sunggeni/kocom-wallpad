@@ -1,7 +1,7 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
-# Kocom WallPad Integration for Home Assistant
-Home Assistant를 위한 Kocom WallPad 통합구성요소
+# Kocom Wallpad Integration for Home Assistant
+Home Assistant를 위한 Kocom Wallpad 통합구성요소
 
 ## 기여
 문제가 있나요? [Issues](https://github.com/lunDreame/kocom-wallpad/issues) 탭에 작성해 주세요.

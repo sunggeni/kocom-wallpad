@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
-import socket
 import voluptuous as vol
 
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 import homeassistant.helpers.config_validation as cv
 
+from .connection import test_connection
 from .const import DOMAIN, LOGGER, DEFAULT_PORT
 
 
@@ -29,11 +29,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST]
             port = user_input[CONF_PORT]
 
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(5)
-                sock.connect((host, port))
-            except socket.timeout:
+            if not await test_connection(host, port):
                 errors["base"] = "cannnot_connect"
             else:
                 await self.async_set_unique_id(host)

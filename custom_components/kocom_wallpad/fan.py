@@ -38,8 +38,6 @@ async def async_setup_entry(
         """Add new fan entity."""
         if isinstance(packet, FanPacket):
             async_add_entities([KocomFanEntity(gateway, packet)])
-        else:
-            LOGGER.warning(f"Unsupported packet type: {packet}")
     
     for entity in gateway.get_entities(Platform.FAN):
         async_add_fan(entity)
@@ -59,11 +57,7 @@ class KocomFanEntity(KocomEntity, FanEntity):
         FanEntityFeature.PRESET_MODE
     )
     _attr_speed_count = 3
-    _attr_preset_modes = [
-        VentMode.VENTILATION.name,
-        VentMode.AUTO.name,
-        VentMode.AIR_PURIFIER.name,
-    ]
+    _attr_preset_modes = list(VentMode.__members__.keys())
     _attr_speed_list = [
         FanSpeed.LOW.value,
         FanSpeed.MEDIUM.value,
@@ -105,14 +99,14 @@ class KocomFanEntity(KocomEntity, FanEntity):
             speed_item = percentage_to_ordered_list_item(self._attr_speed_list, percentage)
             fan_speed = FanSpeed(speed_item)
 
-        packet = self.packet.make_status(fan_speed=fan_speed)
-        await self.send(packet)
+        make_packet = self.packet.make_fan_speed(fan_speed)
+        await self.send_packet(make_packet)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
         vent_mode = VentMode[preset_mode]
-        packet = self.packet.make_status(vent_mode=vent_mode)
-        await self.send(packet)
+        make_packet = self.packet.make_vent_mode(vent_mode)
+        await self.send_packet(make_packet)
 
     async def async_turn_on(
         self,
@@ -122,10 +116,10 @@ class KocomFanEntity(KocomEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the fan."""
-        packet = self.packet.make_status(power=True)
-        await self.send(packet)
+        make_packet = self.packet.make_power_status(True)
+        await self.send_packet(make_packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the fan."""
-        packet = self.packet.make_status(power=False)
-        await self.send(packet)
+        make_packet = self.packet.make_power_status(False)
+        await self.send_packet(make_packet)

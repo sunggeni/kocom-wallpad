@@ -1,66 +1,68 @@
 """Enums for py wallpad."""
 
-from enum import Enum
+from enum import IntEnum
 
-class DeviceType(Enum):
+class DeviceType(IntEnum):
     """Device types for Kocom devices."""
-    WALLPAD = "01"
-    LIGHT = "0e"
-    GAS = "2c"
-    DOORLOCK = "33"
-    THERMOSTAT = "36"
-    AC = "39"
-    OUTLET = "3b"
-    EV = "44"
-    FAN = "48"
-    MOTION = "60"
-    IGNORE = "86"
-    IAQ = "98"
+    WALLPAD = 0x01
+    LIGHT = 0x0E
+    GAS = 0x2C
+    DOORLOCK = 0x33
+    THERMOSTAT = 0x36
+    AC = 0x39
+    OUTLET = 0x3B
+    EV = 0x44
+    FAN = 0x48
+    MOTION = 0x60
+    IGNORE = 0x86
+    IAQ = 0x98
 
-class Command(Enum):
+class Command(IntEnum):
     """Commands for Kocom devices."""
-    STATUS = "00"
-    ON = "01"
-    OFF = "02"
-    DETECT = "04"
-    SCAN = "3a"
-    
-class PacketType(Enum):
+    STATUS = 0x00
+    ON = 0x01
+    OFF = 0x02
+    DETECT = 0x04
+    SCAN = 0x3A
+
+class PacketType(IntEnum):
     """Packet types for Kocom devices."""
-    SEND = "b"
-    RECV = "d"
-    
-class OpMode(Enum):
+    SEND = 0x0B
+    RECV = 0x0D
+
+class OpMode(IntEnum):
     """Operating modes for AC devices."""
-    COOL = "00"
-    FAN_ONLY = "01"
-    DRY = "02"
-    AUTO = "03"
+    COOL = 0x00
+    FAN_ONLY = 0x01
+    DRY = 0x02
+    AUTO = 0x03
 
-class FanMode(Enum):
+class FanMode(IntEnum):
     """Fan modes for fans."""
-    OFF = "00"
-    LOW = "01"
-    MEDIUM = "02"
-    HIGH = "03"
+    OFF = 0x00
+    LOW = 0x01
+    MEDIUM = 0x02
+    HIGH = 0x03
 
-class VentMode(Enum):
+class VentMode(IntEnum):
     """Ventilation modes for fans."""
-    OFF = "00"
-    VENTILATION = "01"
-    AUTO = "02"
-    AIR_PURIFIER = "08"
+    NONE = 0x00
+    VENTILATION = 0x01
+    AUTO = 0x02
+    BYPASS = 0x03
+    NIGHT = 0x05
+    AIR_PURIFIER = 0x08
 
-class FanSpeed(Enum):
+class FanSpeed(IntEnum):
     """Fan speeds for fans."""
-    OFF = "00"
-    LOW = "40"
-    MEDIUM = "80"
-    HIGH = "c0"
-    
-class EvDirection(Enum):
-    """EV directions."""
-    IDLE = "00"
-    DOWN = "01"
-    UP = "02"
-    ARRIVAL = "03"
+    OFF = 0x00
+    LOW = 0x40
+    MEDIUM = 0x80
+    HIGH = 0xC0
+
+class Direction(IntEnum):
+    """Direction for EV devices."""
+    IDLE = 0x00
+    DOWN = 0x01
+    UP = 0x02
+    ARRIVAL = 0x03
