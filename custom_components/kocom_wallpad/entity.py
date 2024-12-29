@@ -10,7 +10,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .pywallpad.packet import Device, KocomPacket
 
 from .gateway import KocomGateway
-from .util import create_dev_id
+from .util import create_dev_id, encode_bytes_to_base64
 from .const import (
     DOMAIN,
     BRAND_NAME,
@@ -20,7 +20,7 @@ from .const import (
     DEVICE_TYPE,
     ROOM_ID,
     SUB_ID,
-    PACKET,
+    PACKET_DATA,
 )
 
 
@@ -95,8 +95,8 @@ class KocomEntity(RestoreEntity):
     @property
     def extra_restore_state_data(self) -> RestoredExtraData:
         """Return extra state data to be restored."""
-        return RestoredExtraData({PACKET: ''.join(self.packet.packet)})
+        return RestoredExtraData({PACKET_DATA: encode_bytes_to_base64(self.packet.packet)})
     
-    async def send(self, packet: bytes) -> None:
+    async def send_packet(self, packet: bytes) -> None:
         """Send a packet to the gateway."""
-        await self.gateway.client.send(packet)
+        await self.gateway.client.send_packet(packet)

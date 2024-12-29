@@ -39,8 +39,6 @@ async def async_setup_entry(
         """Add new switch entity."""
         if isinstance(packet, (OutletPacket, GasPacket, EvPacket)):
             async_add_entities([KocomSwitchEntity(gateway, packet)])
-        else:
-            LOGGER.warning(f"Unsupported packet type: {packet}")
     
     for entity in gateway.get_entities(Platform.SWITCH):
         async_add_switch(entity)
@@ -73,10 +71,10 @@ class KocomSwitchEntity(KocomEntity, SwitchEntity):
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on switch."""
-        packet = self.packet.make_status(power=True)
-        await self.send(packet)
+        make_packet = self.packet.make_power_status(True)
+        await self.send_packet(make_packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off switch."""
-        packet = self.packet.make_status(power=False)
-        await self.send(packet)
+        make_packet = self.packet.make_power_status(False)
+        await self.send_packet(make_packet)

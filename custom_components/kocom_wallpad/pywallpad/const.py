@@ -4,6 +4,9 @@ import logging
 
 _LOGGER = logging.getLogger(__package__)
 
+PREFIX_HEADER = b"\xaaU"
+SUFFIX_HEADER = b"\r\r"
+
 POWER = "power"
 BRIGHTNESS = "brightness"
 LEVEL = "level"
@@ -21,6 +24,8 @@ FAN_MODE = "fan_mode"
 
 VENT_MODE = "vent_mode"
 FAN_SPEED = "fan_speed"
+PRESET_LIST = "preset_list"
+SPEED_LIST = "speed_list"
 
 PM10 = "pm10"
 PM25 = "pm25"
@@ -30,3 +35,4 @@ TEMPERATURE = "temperature"
 HUMIDITY = "humidity"
 
 TIME = "time"
+DATE = "date"

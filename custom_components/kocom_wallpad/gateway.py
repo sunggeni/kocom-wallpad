@@ -11,6 +11,7 @@ from homeassistant.helpers import entity_registry as er, restore_state
 from dataclasses import dataclass
 
 from .pywallpad.client import KocomClient
+from .pywallpad.const import TEMPERATURE, CO2
 from .pywallpad.packet import (
     KocomPacket,
     ThermostatPacket,
@@ -20,8 +21,8 @@ from .pywallpad.packet import (
 )
 
 from .connection import Connection
-from .util import create_dev_id
-from .const import LOGGER, DOMAIN, PACKET, PLATFORM_MAPPING
+from .util import create_dev_id, decode_base64_to_bytes
+from .const import LOGGER, DOMAIN, PACKET_DATA, PLATFORM_MAPPING
 
 
 class KocomGateway:
@@ -70,8 +71,8 @@ class KocomGateway:
         
         if not state or not state.extra_data:
             return []
-        packet_data = state.extra_data.as_dict().get(PACKET)
-        return PacketParser.parse_state(packet_data) if packet_data else []
+        packet_data = state.extra_data.as_dict().get(PACKET_DATA)
+        return PacketParser.parse_state(decode_base64_to_bytes(packet_data)) if packet_data else []
     
     async def async_update_entity_registry(self) -> None:
         """Update the entity registry."""
@@ -113,15 +114,14 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        if isinstance(
-            packet, (ThermostatPacket, FanPacket, EvPacket)
-        ) and (sub_id := packet._device.sub_id):
-            if "error" in sub_id:
+        platform_packet_types = (ThermostatPacket, FanPacket, EvPacket)
+        if isinstance(packet, platform_packet_types) and (sub_id := packet._device.sub_id):
+            if TEMPERATURE in sub_id:
+                platform = Platform.SENSOR
+            elif CO2 in sub_id:
+                platform = Platform.SENSOR
+            elif "error" in sub_id:
                 platform = Platform.BINARY_SENSOR
-            elif "temperature" in sub_id:
-                platform = Platform.SENSOR
-            elif "co2" in sub_id:
-                platform = Platform.SENSOR
             elif "direction" in sub_id:
                 platform = Platform.SENSOR
                 

@@ -8,11 +8,9 @@ import asyncio
 
 from .const import LOGGER
 
-MAX_READ_BYTES = 256
-
 
 class Connection:
-    """Handles gateway connections."""
+    """Connection class."""
     
     def __init__(self, host: str, port: int) -> None:
         """Initialize the Connection."""
@@ -25,7 +23,7 @@ class Connection:
         self.last_reconnect_attempt: Optional[float] = None
         self.next_attempt_time: Optional[float] = None
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Establish a connection."""
         try:
             self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
@@ -39,7 +37,7 @@ class Connection:
         """Check if the connection is active."""
         return self.writer is not None and not self.writer.is_closing()
 
-    async def reconnect(self):
+    async def reconnect(self) -> None:
         """Attempt to reconnect with exponential backoff."""
         if self.writer is not None:
             self.writer.close()
@@ -63,20 +61,19 @@ class Connection:
             self.reconnect_attempts = 0
             self.next_attempt_time = None
 
-    async def send(self, packet: bytearray):
+    async def send(self, packet: bytearray) -> None:
         """Send a packet."""
         try:
             self.writer.write(packet)
             await self.writer.drain()
-            await asyncio.sleep(0.1)
         except Exception as e:
             LOGGER.error(f"Failed to send packet data: {e}")
             await self.reconnect()
 
-    async def receive(self) -> Optional[bytes]:
+    async def receive(self, read_byte: int = 2048) -> Optional[bytes]:
         """Receive data."""
         try:
-            return await self.reader.read(MAX_READ_BYTES)
+            return await self.reader.read(read_byte)
         except asyncio.TimeoutError:
             pass
         except Exception as e:
@@ -84,10 +81,32 @@ class Connection:
             await self.reconnect()
             return None
     
-    async def close(self):
+    async def close(self) -> None:
         """Close the connection."""
         if self.writer:
             LOGGER.info("Connection closed.")
             self.writer.close()
             await self.writer.wait_closed()
             self.writer = None
+
+
+async def test_connection(host: str, port: int, timeout: int = 5) -> bool:
+    """Test the connection with a timeout."""
+    connection = Connection(host, port)
+    try:
+        await asyncio.wait_for(connection.connect(), timeout=timeout)
+        
+        if connection.is_connected():
+            LOGGER.info("Connection test successful.")
+            return True
+        else:
+            LOGGER.error("Connection test failed.")
+            return False
+    except asyncio.TimeoutError:
+        LOGGER.error("Connection test timed out.")
+        return False
+    except Exception as e:
+        LOGGER.error(f"Connection test failed with error: {e}")
+        return False
+    finally:
+        await connection.close()

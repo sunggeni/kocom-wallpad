@@ -33,8 +33,6 @@ async def async_setup_entry(
         """Add new light entity."""
         if isinstance(packet, LightPacket):
             async_add_entities([KocomLightEntity(gateway, packet)])
-        else:
-            LOGGER.warning(f"Unsupported packet type: {packet}")
 
     for entity in gateway.get_entities(Platform.LIGHT):
         async_add_light(entity)
@@ -81,21 +79,17 @@ class KocomLightEntity(KocomEntity, LightEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
         if self.has_brightness:
-            brightness = kwargs.get(ATTR_BRIGHTNESS)
-            if brightness is None:
-                LOGGER.warning("Brightness not set")
-                return
-            
+            brightness = int(kwargs.get(ATTR_BRIGHTNESS, 255))
             brightness = ((brightness * 3) // 225) + 1
             if brightness not in self.device.state[LEVEL]:
                 brightness = 255
-            packet = self.packet.make_status(brightness=brightness)
+            make_packet = self.packet.make_brightness_status(brightness)
         else:
-            packet = self.packet.make_status(power=True)
+            make_packet = self.packet.make_power_status(True)
 
-        await self.send(packet)
+        await self.send_packet(make_packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
-        packet = self.packet.make_status(power=False)
-        await self.send(packet)
+        make_packet = self.packet.make_power_status(False)
+        await self.send_packet(make_packet)

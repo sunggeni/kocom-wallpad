@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from queue import Queue
-from typing import Callable, Optional
+from typing import Optional, Callable, Awaitable
 
 from ..connection import Connection
 
-from .crc import verify_checksum
+from .crc import verify_checksum, calculate_checksum
 from .packet import PacketParser
-from .const  import _LOGGER
+from .const import _LOGGER, PREFIX_HEADER, SUFFIX_HEADER
 
 
 class PacketQueue:
@@ -57,31 +57,36 @@ class PacketQueue:
 class KocomClient:
     """Client for the Kocom Wallpad."""
 
-    def __init__(self, connection: Connection, timeout = 1.2, max_retries = 3) -> None:
+    def __init__(
+        self,
+        connection: Connection,
+        timeout: float = 0.25,
+        max_retries = 3
+    ) -> None:
         """Initialize the KocomClient."""
+        self.connection = connection
         self.timeout = timeout
         self.max_retries = max_retries
 
-        self.connection = connection
         self.tasks: list[asyncio.Task] = []
-        self.device_callbacks: list[Callable] = []
+        self.device_callbacks: list[Callable[[dict], Awaitable[None]]] = []
         self.packet_queue = PacketQueue()
 
     async def start(self) -> None:
         """Start the client."""
-        _LOGGER.debug("Starting client...")
+        _LOGGER.debug("Starting Kocom Client...")
         self.tasks.append(asyncio.create_task(self._listen()))
         self.tasks.append(asyncio.create_task(self._process_queue()))
 
     async def stop(self) -> None:
         """Stop the client."""
-        _LOGGER.debug("Stopping client...")
+        _LOGGER.debug("Stopping Kocom Client...")
         for task in self.tasks:
             task.cancel()
         self.tasks.clear()
         self.device_callbacks.clear()
 
-    def add_device_callback(self, callback: Callable) -> None:
+    def add_device_callback(self, callback: Callable[[dict], Awaitable[None]]) -> None:
         """Add callback for device updates."""
         self.device_callbacks.append(callback)
 
@@ -93,16 +98,16 @@ class KocomClient:
                 if receive_data is None:
                     continue
                 
-                packets = self.extract_packets(receive_data)
-                for packet in packets:
+                packet_list = self.extract_packets(receive_data)
+                for packet in packet_list:
                     if not verify_checksum(packet):
                         _LOGGER.debug("Checksum verification failed for packet: %s", packet.hex())
                         continue
                     
-                    parsed_packet = PacketParser.parse_state(packet.hex())
-                    for parse_packet in parsed_packet:
+                    parsed_packets = PacketParser.parse_state(packet)
+                    for parsed_packet in parsed_packets:
                         for callback in self.device_callbacks:
-                            await callback(parse_packet)
+                            await callback(parsed_packet)
             except Exception as e:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
     
@@ -112,18 +117,18 @@ class KocomClient:
         start = 0
 
         while start < len(data):
-            start_pos = data.find(b'\xaa\x55', start)
+            start_pos = data.find(PREFIX_HEADER, start)
             if start_pos == -1:
                 break
 
-            end_pos = data.find(b'\x0d\x0d', start_pos + len(b'\xaa\x55'))
+            end_pos = data.find(SUFFIX_HEADER, start_pos + len(PREFIX_HEADER))
             if end_pos == -1:
                 break
 
-            packet = data[start_pos:end_pos + len(b'\x0d\x0d')]
+            packet = data[start_pos:end_pos + len(SUFFIX_HEADER)]
             packets.append(packet)
 
-            start = end_pos + len(b'\x0d\x0d')
+            start = end_pos + len(SUFFIX_HEADER)
 
         return packets
     
@@ -150,6 +155,15 @@ class KocomClient:
                 else:
                     _LOGGER.error(f"Max retries reached for packet: {packet.hex()}")
 
-    async def send(self, packet: bytes) -> None:
+    async def send_packet(self, packet: bytearray) -> None:
         """Send a packet to the device."""
+        packet[:0] = PREFIX_HEADER
+        if (checksum := calculate_checksum(packet)) is None:
+            _LOGGER.error("Checksum calculation failed for packet: %s", packet.hex())
+            return
+        packet.append(checksum)
+        packet.extend(SUFFIX_HEADER)
+        if not verify_checksum(packet):
+            _LOGGER.error("Checksum verification failed for packet: %s", packet.hex())
+            return
         self.packet_queue.add_packet(packet)

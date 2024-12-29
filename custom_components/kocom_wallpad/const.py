@@ -25,12 +25,13 @@ DEFAULT_PORT = 8899
 BRAND_NAME = "kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.0.2"
+SW_VERSION = "1.0.3"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
 SUB_ID = "sub_id"
-PACKET = "packet"
+
+PACKET_DATA = "packet_data"
 
 PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
     LightPacket: Platform.LIGHT,

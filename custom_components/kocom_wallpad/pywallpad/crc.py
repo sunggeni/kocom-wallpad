@@ -1,7 +1,5 @@
 """CRC calculation for py wallpad."""
 
-from typing import Optional
-
 def crc_ccitt_xmodem(data: bytes) -> int:
     """Calculate CRC-CCITT (XMODEM) checksum."""
     crc = 0x0000
@@ -28,7 +26,7 @@ def verify_crc(packet: bytes) -> bool:
     calculated_checksum = crc_ccitt_xmodem(data)
     return calculated_checksum == provided_checksum
 
-def calculate_crc(packet: bytes) -> Optional[tuple[int, int]]:
+def calculate_crc(packet: bytes) -> list[int, int] | None:
     """Calculate CRC for a packet."""
     if len(packet) < 17:
         return None
@@ -39,7 +37,7 @@ def calculate_crc(packet: bytes) -> Optional[tuple[int, int]]:
     # Append the 16-bit checksum (split into two bytes)
     checksum_high = (checksum >> 8) & 0xFF
     checksum_low = checksum & 0xFF
-    return checksum_high, checksum_low
+    return list(checksum_high, checksum_low)
 
 def verify_checksum(packet: bytes) -> bool:
     """Verify checksum for a packet."""
@@ -50,7 +48,7 @@ def verify_checksum(packet: bytes) -> bool:
     calculated_checksum = (data_sum + 1) % 256
     return calculated_checksum == packet[18]
 
-def calculate_checksum(packet: bytes) -> Optional[int]:
+def calculate_checksum(packet: bytes) -> int | None:
     """Calculate checksum for a packet."""
     if len(packet) < 17:
         return None
