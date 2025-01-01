@@ -5,6 +5,12 @@ from __future__ import annotations
 import base64
 import json
 
+def process_string(s: str) -> str:
+    """Return as-is if uppercase, else title case."""
+    if s.isupper():
+        return s
+    return s.title()
+
 def create_dev_id(
     device_type: str, room_id: str | None, sub_id: str | None
 ) -> str:

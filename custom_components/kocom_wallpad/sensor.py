@@ -29,13 +29,14 @@ from .pywallpad.const import (
     VOC,
     TEMPERATURE,
     HUMIDITY,
+    FLOOR,
 )
 from .pywallpad.enums import DeviceType
 from .pywallpad.packet import (
     KocomPacket,
     FanPacket,
     IAQPacket,
-    EvPacket,
+    EVPacket,
 )
 
 from .gateway import KocomGateway
@@ -54,7 +55,7 @@ async def async_setup_entry(
     @callback
     def async_add_sensor(packet: KocomPacket) -> None:
         """Add new sensor entity."""
-        if isinstance(packet, (FanPacket, IAQPacket, EvPacket)):
+        if isinstance(packet, (FanPacket, IAQPacket, EVPacket)):
             async_add_entities([KocomSensorEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.SENSOR):
@@ -116,4 +117,6 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
             return UnitOfTemperature.CELSIUS
         elif self.device.sub_id == HUMIDITY:
             return PERCENTAGE
+        elif self.device.sub_id == FLOOR:
+            return "층"
         return None

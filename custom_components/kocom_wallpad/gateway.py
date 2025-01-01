@@ -11,12 +11,12 @@ from homeassistant.helpers import entity_registry as er, restore_state
 from dataclasses import dataclass
 
 from .pywallpad.client import KocomClient
-from .pywallpad.const import TEMPERATURE, CO2
+from .pywallpad.const import ERROR, CO2, TEMPERATURE, DIRECTION, FLOOR
 from .pywallpad.packet import (
     KocomPacket,
     ThermostatPacket,
     FanPacket,
-    EvPacket,
+    EVPacket,
     PacketParser,
 )
 
@@ -114,15 +114,15 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        platform_packet_types = (ThermostatPacket, FanPacket, EvPacket)
+        platform_packet_types = (ThermostatPacket, FanPacket, EVPacket)
         if isinstance(packet, platform_packet_types) and (sub_id := packet._device.sub_id):
-            if TEMPERATURE in sub_id:
-                platform = Platform.SENSOR
+            if ERROR in sub_id:
+                platform = Platform.BINARY_SENSOR
             elif CO2 in sub_id:
                 platform = Platform.SENSOR
-            elif "error" in sub_id:
-                platform = Platform.BINARY_SENSOR
-            elif "direction" in sub_id:
+            elif TEMPERATURE in sub_id:
+                platform = Platform.SENSOR
+            elif sub_id in {DIRECTION, FLOOR}:  # EV
                 platform = Platform.SENSOR
                 
         return platform

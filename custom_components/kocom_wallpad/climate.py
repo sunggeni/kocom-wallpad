@@ -28,7 +28,7 @@ from .pywallpad.const import (
     TARGET_TEMP,
 )
 from .pywallpad.enums import OpMode, FanMode
-from .pywallpad.packet import KocomPacket, ThermostatPacket, AcPacket
+from .pywallpad.packet import KocomPacket, ThermostatPacket, ACPacket
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -48,8 +48,8 @@ async def async_setup_entry(
         """Add new climate entity."""
         if isinstance(packet, ThermostatPacket):
             async_add_entities([KocomThermostatEntity(gateway, packet)])
-        elif isinstance(packet, AcPacket):
-            async_add_entities([KocomAcEntity(gateway, packet)])
+        elif isinstance(packet, ACPacket):
+            async_add_entities([KocomACEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.CLIMATE):
         async_add_climate(entity)
@@ -136,7 +136,7 @@ class KocomThermostatEntity(KocomEntity, ClimateEntity):
         await self.send_packet(make_packet)
 
 
-class KocomAcEntity(KocomEntity, ClimateEntity):
+class KocomACEntity(KocomEntity, ClimateEntity):
     """Representation of a Kocom climate."""
 
     _enable_turn_on_off_backwards_compatibility = False

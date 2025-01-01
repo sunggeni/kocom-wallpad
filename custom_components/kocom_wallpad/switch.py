@@ -18,7 +18,7 @@ from .pywallpad.packet import (
     KocomPacket,
     OutletPacket,
     GasPacket,
-    EvPacket,
+    EVPacket,
 )
 
 from .gateway import KocomGateway
@@ -37,7 +37,7 @@ async def async_setup_entry(
     @callback
     def async_add_switch(packet: KocomPacket) -> None:
         """Add new switch entity."""
-        if isinstance(packet, (OutletPacket, GasPacket, EvPacket)):
+        if isinstance(packet, (OutletPacket, GasPacket, EVPacket)):
             async_add_entities([KocomSwitchEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.SWITCH):

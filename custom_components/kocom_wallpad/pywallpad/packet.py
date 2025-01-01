@@ -19,6 +19,7 @@ from .const import (
     ERROR_CODE,
     HOTWATER_TEMP,
     HEATWATER_TEMP,
+    ERROR,
     OP_MODE,
     FAN_MODE,
     VENT_MODE,
@@ -32,6 +33,8 @@ from .const import (
     TEMPERATURE,
     HUMIDITY,
     TIME,
+    DIRECTION,
+    FLOOR,
 )
 from .enums import (
     DeviceType,
@@ -90,18 +93,19 @@ class KocomPacket:
         return str(self.src[1])
     
     @property
-    def name(self) -> str:
-        """Return the name of the device."""
-        return self.device_type.name.lower()
-    
-    @property
     def device_id(self) -> str:
         """Return the device ID."""
-        return f"{self.name}_{self.room_id}"
+        return f"{self.device_name()}_{self.room_id}"
+    
+    def device_name(self, upper=False) -> str:
+        """Return the device name."""
+        if upper:
+            return self.device_type.name.upper()
+        return self.device_type.name.lower()
     
     def parse_data(self) -> list[Device]:
         """Parse data from the packet."""
-        _LOGGER.warning("Parsing not implemented for %s", self.name)
+        _LOGGER.warning("Parsing not implemented for %s", self.device_name())
         return []
     
     def make_packet(self, command: Command, value_packet: bytearray) -> bytearray:
@@ -158,7 +162,7 @@ class LightPacket(KocomPacket):
                     state[LEVEL] = self.valid_light_indices[self.room_id][i]
                 
                 device = Device(
-                    device_type=self.name,
+                    device_type=self.device_name(),
                     room_id=self.room_id,
                     device_id=self.device_id,
                     state=state,
@@ -211,7 +215,7 @@ class OutletPacket(KocomPacket):
 
             if i in self.valid_outlet_indices[self.room_id]:
                 device = Device(
-                    device_type=self.name,
+                    device_type=self.device_name(),
                     room_id=self.room_id,
                     device_id=self.device_id,
                     state={POWER: power_state},
@@ -235,6 +239,10 @@ class OutletPacket(KocomPacket):
 
 class ThermostatPacket(KocomPacket):
     """Handles packets for thermostat devices."""
+    # Store
+    support_hotwater_sensor = False
+    last_target_temp: dict[str, int] = {}
+    # {room_id: target_temp...}
 
     def parse_data(self) -> list[Device]:
         """Parse thermostat-specific data."""
@@ -250,15 +258,24 @@ class ThermostatPacket(KocomPacket):
         error_code = self.value[6]
         boiler_error = self.value[7]
         
+        if hotwater_state:
+            self.support_hotwater_sensor = True
+        
+        if self.room_id not in self.last_target_temp:
+            self.last_target_temp[self.room_id] = 22  # default temp
+        
+        if power_state and self.last_target_temp[self.room_id] != target_temp:
+            self.last_target_temp[self.room_id] = target_temp
+        
         devices.append(
             Device(
-                device_type=self.name,
+                device_type=self.device_name(),
                 room_id=self.room_id,
                 device_id=self.device_id,
                 state={
                     POWER: power_state,
                     AWAY_MODE: away_mode,
-                    TARGET_TEMP: target_temp,
+                    TARGET_TEMP: self.last_target_temp[self.room_id],
                     CURRENT_TEMP: current_temp,
                 },
             )
@@ -267,44 +284,44 @@ class ThermostatPacket(KocomPacket):
         if self.room_id == '0':
             devices.append(
                 Device(
-                    device_type=self.name,
+                    device_type=self.device_name(),
                     device_id=self.device_id,
                     state={STATE: error_code != 0, ERROR_CODE: error_code},
-                    sub_id="error",
+                    sub_id=ERROR,
                 )
             )
             devices.append(
                 Device(
-                    device_type=self.name,
+                    device_type=self.device_name(),
                     device_id=self.device_id,
                     state={STATE: boiler_error != 0, ERROR_CODE: boiler_error},
-                    sub_id="boiler error",
+                    sub_id=f"boiler {ERROR}",
                 )
             )
 
-        if hotwater_state and self.room_id == '0':
+        if self.support_hotwater_sensor and self.room_id == '0':
             _LOGGER.debug(f"Supports hot water in thermostat.")
 
             if hotwater_temp > 0:
                 _LOGGER.debug(f"Supports hot water temperature in thermostat.")
                 devices.append(
                     Device(
-                        device_type=self.name,
+                        device_type=self.device_name(),
                         room_id=None,
                         device_id=self.device_id,
                         state={HOTWATER_TEMP: hotwater_temp},
-                        sub_id="hotwater temperature",
+                        sub_id=f"hotwater {TEMPERATURE}",
                     )
                 )
             if heatwater_temp > 0:
                 _LOGGER.debug(f"Supports heat water temperature in thermostat.")
                 devices.append(
                     Device(
-                        device_type=self.name,
+                        device_type=self.device_name(),
                         room_id=None,
                         device_id=self.device_id,
                         state={HEATWATER_TEMP: heatwater_temp},
-                        sub_id="heatwater temperature",
+                        sub_id=f"heatwater {TEMPERATURE}",
                     )
                 )
             
@@ -335,7 +352,7 @@ class ThermostatPacket(KocomPacket):
         return super().make_packet(Command.STATUS, value)
 
 
-class AcPacket(KocomPacket):
+class ACPacket(KocomPacket):
     """Handles packets for AC devices."""
 
     def parse_data(self) -> list[Device]:
@@ -347,7 +364,7 @@ class AcPacket(KocomPacket):
         target_temp = self.value[5]
 
         device = Device(
-            device_type=self.name,
+            device_type=self.device_name(upper=True),
             room_id=self.room_id,
             device_id=self.device_id,
             state={
@@ -392,25 +409,29 @@ class AcPacket(KocomPacket):
 
 class FanPacket(KocomPacket):
     """Handles packets for fan devices."""
-    co2_sensor = False
+    # Store
+    support_co2_sensor = False
 
     def parse_data(self) -> list[Device]:
         """Parse fan-specific data."""
         devices: list[Device] = []
 
         power_state = self.value[0] >> 4 == 1
-        self.co2_sensor = self.value[0] & 0x0F == 1
+        co2_sensor = self.value[0] & 0x0F == 1
         vent_mode = VentMode(self.value[1])
         fan_speed = FanSpeed(self.value[2])
         co2_state = (self.value[4] * 100) + self.value[5]
         error_code = self.value[6]
-        
+
         preset_list = list(VentMode.__members__.keys())
         speed_list = list(FanSpeed.__members__.keys())
 
+        if co2_sensor:
+            self.support_co2_sensor = True
+
         devices.append(
             Device(
-                device_type=self.name,
+                device_type=self.device_name(),
                 room_id=self.room_id,
                 device_id=self.device_id,
                 state={
@@ -424,18 +445,18 @@ class FanPacket(KocomPacket):
         )
         devices.append(
             Device(
-                device_type=self.name,
+                device_type=self.device_name(),
                 device_id=self.device_id,
                 state={STATE: error_code != 0, ERROR_CODE: error_code},
-                sub_id="error",
+                sub_id=ERROR,
             )
         )
         
-        if self.co2_sensor:
+        if self.support_co2_sensor:
             _LOGGER.debug(f"Supports CO2 sensor in fan.")
             devices.append(
                 Device(
-                    device_type=self.name,
+                    device_type=self.device_name(),
                     room_id=self.room_id,
                     device_id=self.device_id,
                     state={STATE: co2_state},
@@ -490,7 +511,7 @@ class IAQPacket(KocomPacket):
             if state > 0:
                 _LOGGER.debug(f"Supports {sensor_id} in IAQ.")
                 device = Device(
-                    device_type=self.name,
+                    device_type=self.device_name(upper=True),
                     device_id=self.device_id,
                     state={STATE: state},
                     sub_id=sensor_id,
@@ -510,7 +531,7 @@ class GasPacket(KocomPacket):
     def parse_data(self) -> list[Device]:
         """Parse gas-specific data."""
         device = Device(
-            device_type=self.name,
+            device_type=self.device_name(),
             room_id=self.room_id,
             device_id=self.device_id,
             state={POWER: self.command == Command.ON},
@@ -535,7 +556,7 @@ class MotionPacket(KocomPacket):
     def parse_data(self) -> list[Device]:
         """Parse motion-specific data."""
         device = Device(
-            device_type=self.name,
+            device_type=self.device_name(),
             room_id=self.room_id,
             device_id=self.device_id,
             state={STATE: self.command == Command.DETECT, TIME: time.time()},
@@ -543,30 +564,57 @@ class MotionPacket(KocomPacket):
         return [device]
 
 
-class EvPacket(KocomPacket):
+class EVPacket(KocomPacket):
     """Handles packets for EV devices."""
+    # Store
+    support_floor_sensor = False
 
     def parse_data(self) -> list[Device]:
         """Parse EV-specific data."""
         devices: list[Device] = []
 
+        power_state = False
+        direction_state = Direction(self.value[0])
+        floor_state = self.value[1]
+
+        if direction_state == Direction.ARRIVAL:
+            time.sleep(2)
+            direction_state = Direction.IDLE
+        if self.support_floor_sensor:
+            floor_state = floor_state if floor_state > 0 else "대기"
+        
         devices.append(
             Device(
-                device_type=self.name,
+                device_type=self.device_name(upper=True),
                 room_id=self.room_id,
                 device_id=self.device_id,
-                state={POWER: False},
+                state={POWER: power_state},
             )
         )
         devices.append(
             Device(
-                device_type=self.name,
+                device_type=self.device_name(upper=True),
                 room_id=self.room_id,
                 device_id=self.device_id,
-                state={STATE: Direction(self.value[0]).name},
-                sub_id="direction",
+                state={STATE: direction_state.name},
+                sub_id=DIRECTION,
             )
         )
+
+        if floor_state > 0 or self.support_floor_sensor:
+            self.support_floor_sensor = True
+            _LOGGER.debug(f"Supports floor sensor in EV.")
+            
+            devices.append(
+                Device(
+                    device_type=self.device_name(upper=True),
+                    room_id=self.room_id,
+                    device_id=self.device_id,
+                    state={STATE: floor_state},
+                    sub_id=FLOOR,
+                )
+            )
+        
         return devices
     
     def make_power_status(self, power: bool) -> bytearray:
@@ -613,12 +661,12 @@ class PacketParser:
             DeviceType.LIGHT.value: LightPacket,
             DeviceType.OUTLET.value: OutletPacket,
             DeviceType.THERMOSTAT.value: ThermostatPacket,
-            DeviceType.AC.value: AcPacket,
+            DeviceType.AC.value: ACPacket,
             DeviceType.FAN.value: FanPacket,
             DeviceType.IAQ.value: IAQPacket,
             DeviceType.GAS.value: GasPacket,
             DeviceType.MOTION.value: MotionPacket,
-            DeviceType.EV.value: EvPacket,
+            DeviceType.EV.value: EVPacket,
             DeviceType.WALLPAD.value: KocomPacket,
         }
 

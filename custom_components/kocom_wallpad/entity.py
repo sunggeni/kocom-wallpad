@@ -6,13 +6,17 @@ from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity, RestoredExtraData
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import Throttle
+
+from datetime import timedelta
 
 from .pywallpad.packet import Device, KocomPacket
 
 from .gateway import KocomGateway
-from .util import create_dev_id, encode_bytes_to_base64
+from .util import process_string, create_dev_id, encode_bytes_to_base64
 from .const import (
     DOMAIN,
+    LOGGER,
     BRAND_NAME,
     MANUFACTURER,
     MODEL,
@@ -23,12 +27,14 @@ from .const import (
     PACKET_DATA,
 )
 
+MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=60)
+
 
 class KocomEntity(RestoreEntity):
     """Base class for Kocom Wallpad entities."""
 
     _attr_has_entity_name = True
-    _attr_should_poll = False
+    _attr_should_poll = True
     
     def __init__(
         self,
@@ -42,7 +48,7 @@ class KocomEntity(RestoreEntity):
         self.device_update_signal = f"{DOMAIN}_{self.gateway.host}_{self.device_id}"
         
         self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}-{self.gateway.host}"
-        self._attr_name = f"{BRAND_NAME} {self.name}"
+        self._attr_name = f"{BRAND_NAME} {self.device_name}"
         self._attr_extra_state_attributes = {
             DEVICE_TYPE: self.device.device_type,
             ROOM_ID: self.device.room_id,
@@ -57,9 +63,9 @@ class KocomEntity(RestoreEntity):
         )
     
     @property
-    def name(self) -> str:
-        """Return the name of the entity."""
-        return self.device_id.replace("_", " ").title()
+    def device_name(self) -> str:
+        """Return the device name."""
+        return process_string(self.device_id.replace("_", " "))
     
     @property
     def device_info(self) -> DeviceInfo:
@@ -68,7 +74,7 @@ class KocomEntity(RestoreEntity):
             identifiers={(DOMAIN, f"{self.gateway.host}_{self.device.device_type}")},
             manufacturer=MANUFACTURER,
             model=MODEL,
-            name=f"{BRAND_NAME.title()} {self.device.device_type}",
+            name=f"{BRAND_NAME} {process_string(self.device.device_type)}",
             sw_version=SW_VERSION,
             via_device=(DOMAIN, self.gateway.host),
         )
@@ -100,3 +106,10 @@ class KocomEntity(RestoreEntity):
     async def send_packet(self, packet: bytes) -> None:
         """Send a packet to the gateway."""
         await self.gateway.client.send_packet(packet)
+    
+    @Throttle(MIN_TIME_BETWEEN_UPDATES)
+    async def async_update(self) -> None:
+        """Update device state."""
+        if hasattr(self.packet, "make_scan") and callable(self.packet.make_scan):
+            make_packet = self.packet.make_scan()
+            await self.send_packet(make_packet)

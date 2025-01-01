@@ -6,12 +6,12 @@ from .pywallpad.packet import (
     LightPacket,
     OutletPacket,
     ThermostatPacket,
-    AcPacket,
+    ACPacket,
     FanPacket,
     IAQPacket,
     GasPacket,
     MotionPacket,
-    EvPacket,
+    EVPacket,
 )
 
 from homeassistant.const import Platform
@@ -22,10 +22,10 @@ LOGGER = logging.getLogger(__package__)
 
 DEFAULT_PORT = 8899
 
-BRAND_NAME = "kocom"
+BRAND_NAME = "Kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.0.3"
+SW_VERSION = "1.0.4"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
@@ -37,10 +37,10 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
     LightPacket: Platform.LIGHT,
     OutletPacket: Platform.SWITCH,
     ThermostatPacket: Platform.CLIMATE,
-    AcPacket: Platform.CLIMATE,
+    ACPacket: Platform.CLIMATE,
     FanPacket: Platform.FAN,
     IAQPacket: Platform.SENSOR,
     GasPacket: Platform.SWITCH,
     MotionPacket: Platform.BINARY_SENSOR,
-    EvPacket: Platform.SWITCH,
+    EVPacket: Platform.SWITCH,
 }
