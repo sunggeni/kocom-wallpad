@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.const import Platform, CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, Event
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import entity_registry as er, restore_state
@@ -60,6 +60,10 @@ class KocomGateway:
         await self.client.start()
         self.client.add_device_callback(self._handle_device_update)
         
+    async def async_close(self, event: Event) -> None:
+        """Close the gateway."""
+        await self.async_disconnect()
+    
     def get_entities(self, platform: Platform) -> list[KocomPacket]:
         """Get the entities for the platform."""
         return list(self.entities.get(platform, {}).values())
@@ -105,7 +109,7 @@ class KocomGateway:
             async_dispatcher_send(self.hass, add_signal, packet)
         
         device_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
-        async_dispatcher_send(self.hass, device_update_signal, device)
+        async_dispatcher_send(self.hass, device_update_signal, packet)
         
     def parse_platform(self, packet: KocomPacket) -> Platform | None:
         """Parse the platform from the packet."""

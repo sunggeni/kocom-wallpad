@@ -34,7 +34,7 @@ class KocomEntity(RestoreEntity):
     """Base class for Kocom Wallpad entities."""
 
     _attr_has_entity_name = True
-    _attr_should_poll = True
+    _attr_should_poll = False
     
     def __init__(
         self,
@@ -85,10 +85,11 @@ class KocomEntity(RestoreEntity):
         return self.gateway.connection.is_connected()
     
     @callback
-    def async_handle_device_update(self, device: Device) -> None:
+    def async_handle_device_update(self, packet: KocomPacket) -> None:
         """Handle device update."""
-        if self.device.state != device.state:
-            self.device.state = device.state
+        if self.packet._device.state != packet._device.state:
+            self.packet = packet
+            self.device = packet._device
             self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:

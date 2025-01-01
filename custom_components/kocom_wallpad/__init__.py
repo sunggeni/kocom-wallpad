@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.const import Platform
+from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
@@ -32,6 +32,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await gateway.async_start()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    #entry.async_on_unload(
+    #    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, gateway.async_close)
+    #)
 
     return True
 
