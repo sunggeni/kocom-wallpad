@@ -32,9 +32,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await gateway.async_start()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    #entry.async_on_unload(
-    #    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, gateway.async_close)
-    #)
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, gateway.async_close)
+    )
 
     return True
 

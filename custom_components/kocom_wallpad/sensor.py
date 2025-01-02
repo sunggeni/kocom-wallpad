@@ -83,40 +83,40 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
     @property
     def native_value(self) -> int:
         """Return the state of the sensor."""
-        return self.device.state[STATE]
+        return self.packet._device.state[STATE]
     
     @property
     def device_class(self) -> SensorDeviceClass | None:
         """Return the device class of the sensor."""
-        if self.device.sub_id == CO2:
+        if self.packet._device.sub_id == CO2:
             return SensorDeviceClass.CO2
-        elif self.device.sub_id == PM10:
+        elif self.packet._device.sub_id == PM10:
             return SensorDeviceClass.PM10
-        elif self.device.sub_id == PM25:
+        elif self.packet._device.sub_id == PM25:
             return SensorDeviceClass.PM25
-        elif self.device.sub_id == VOC:
+        elif self.packet._device.sub_id == VOC:
             return SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS
-        elif self.device.sub_id == TEMPERATURE:
+        elif self.packet._device.sub_id == TEMPERATURE:
             return SensorDeviceClass.TEMPERATURE
-        elif self.device.sub_id == HUMIDITY:
+        elif self.packet._device.sub_id == HUMIDITY:
             return SensorDeviceClass.HUMIDITY
         return None
     
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the native unit of measurement."""
-        if self.device.sub_id == CO2:
+        if self.packet._device.sub_id == CO2:
             return CONCENTRATION_PARTS_PER_MILLION
-        elif self.device.sub_id == PM10:
+        elif self.packet._device.sub_id == PM10:
             return CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
-        elif self.device.sub_id == PM25:
+        elif self.packet._device.sub_id == PM25:
             return CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
-        elif self.device.sub_id == VOC:
+        elif self.packet._device.sub_id == VOC:
             return CONCENTRATION_PARTS_PER_BILLION
-        elif self.device.sub_id == TEMPERATURE:
+        elif self.packet._device.sub_id == TEMPERATURE:
             return UnitOfTemperature.CELSIUS
-        elif self.device.sub_id == HUMIDITY:
+        elif self.packet._device.sub_id == HUMIDITY:
             return PERCENTAGE
-        elif self.device.sub_id == FLOOR:
+        elif self.packet._device.sub_id == FLOOR:
             return "층"
         return None

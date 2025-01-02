@@ -61,7 +61,7 @@ class KocomClient:
         self,
         connection: Connection,
         timeout: float = 0.25,
-        max_retries = 3
+        max_retries = 5
     ) -> None:
         """Initialize the KocomClient."""
         self.connection = connection
@@ -89,7 +89,7 @@ class KocomClient:
     def add_device_callback(self, callback: Callable[[dict], Awaitable[None]]) -> None:
         """Add callback for device updates."""
         self.device_callbacks.append(callback)
-
+    
     async def _listen(self) -> None:
         """Listen for incoming packets."""
         while self.connection.is_connected():
@@ -103,9 +103,13 @@ class KocomClient:
                     if not verify_checksum(packet):
                         _LOGGER.debug("Checksum verification failed for packet: %s", packet.hex())
                         continue
-                    
+
                     parsed_packets = PacketParser.parse_state(packet)
                     for parsed_packet in parsed_packets:
+                        _LOGGER.debug(
+                            "Received packet: %s, %s, %s", 
+                            parsed_packet, parsed_packet._device, parsed_packet._last_data
+                        )
                         for callback in self.device_callbacks:
                             await callback(parsed_packet)
             except Exception as e:

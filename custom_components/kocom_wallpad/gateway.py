@@ -22,7 +22,7 @@ from .pywallpad.packet import (
 
 from .connection import Connection
 from .util import create_dev_id, decode_base64_to_bytes
-from .const import LOGGER, DOMAIN, PACKET_DATA, PLATFORM_MAPPING
+from .const import LOGGER, DOMAIN, PACKET_DATA, LAST_DATA, PLATFORM_MAPPING
 
 
 class KocomGateway:
@@ -75,8 +75,16 @@ class KocomGateway:
         
         if not state or not state.extra_data:
             return []
+        
         packet_data = state.extra_data.as_dict().get(PACKET_DATA)
-        return PacketParser.parse_state(decode_base64_to_bytes(packet_data)) if packet_data else []
+        if not packet_data:
+            return []
+        
+        packet = decode_base64_to_bytes(packet_data)
+        last_data = state.extra_data.as_dict().get(LAST_DATA)
+        LOGGER.debug(f"Last data: {last_data}")
+
+        return PacketParser.parse_state(packet, last_data)
     
     async def async_update_entity_registry(self) -> None:
         """Update the entity registry."""
@@ -108,8 +116,8 @@ class KocomGateway:
             add_signal = f"{DOMAIN}_{platform.value}_add"
             async_dispatcher_send(self.hass, add_signal, packet)
         
-        device_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
-        async_dispatcher_send(self.hass, device_update_signal, packet)
+        packet_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
+        async_dispatcher_send(self.hass, packet_update_signal, packet)
         
     def parse_platform(self, packet: KocomPacket) -> Platform | None:
         """Parse the platform from the packet."""

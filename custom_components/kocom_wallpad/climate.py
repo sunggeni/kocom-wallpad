@@ -83,22 +83,22 @@ class KocomThermostatEntity(KocomEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
-        return HVACMode.HEAT if self.device.state[POWER] else HVACMode.OFF
+        return HVACMode.HEAT if self.packet._device.state[POWER] else HVACMode.OFF
 
     @property
     def preset_mode(self) -> str:
         """Return the current preset mode."""
-        return PRESET_AWAY if self.device.state[AWAY_MODE] else PRESET_NONE
+        return PRESET_AWAY if self.packet._device.state[AWAY_MODE] else PRESET_NONE
 
     @property
     def current_temperature(self) -> int:
         """Return the current temperature."""
-        return self.device.state[CURRENT_TEMP]
+        return self.packet._device.state[CURRENT_TEMP]
 
     @property
     def target_temperature(self) -> int:
         """Return the target temperature."""
-        return self.device.state[TARGET_TEMP]
+        return self.packet._device.state[TARGET_TEMP]
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set the HVAC mode."""
@@ -166,8 +166,8 @@ class KocomACEntity(KocomEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
-        if self.device.state[POWER]:
-            op_mode = self.device.state[OP_MODE]
+        if self.packet._device.state[POWER]:
+            op_mode = self.packet._device.state[OP_MODE]
             return {
                 OpMode.COOL: HVACMode.COOL,
                 OpMode.FAN_ONLY: HVACMode.FAN_ONLY,
@@ -183,17 +183,17 @@ class KocomACEntity(KocomEntity, ClimateEntity):
             FanMode.LOW: FAN_LOW,
             FanMode.MEDIUM: FAN_MEDIUM,
             FanMode.HIGH: FAN_HIGH,
-        }.get(self.device.state[FAN_MODE])
+        }.get(self.packet._device.state[FAN_MODE])
 
     @property
     def current_temperature(self) -> int:
         """Return the current temperature."""
-        return self.device.state[CURRENT_TEMP]
+        return self.packet._device.state[CURRENT_TEMP]
 
     @property
     def target_temperature(self) -> int:
         """Return the target temperature."""
-        return self.device.state[TARGET_TEMP]
+        return self.packet._device.state[TARGET_TEMP]
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set a new target HVAC mode."""

@@ -32,6 +32,7 @@ ROOM_ID = "room_id"
 SUB_ID = "sub_id"
 
 PACKET_DATA = "packet_data"
+LAST_DATA = "last_data"
 
 PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
     LightPacket: Platform.LIGHT,

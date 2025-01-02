@@ -66,6 +66,7 @@ class Connection:
         try:
             self.writer.write(packet)
             await self.writer.drain()
+            await asyncio.sleep(0.5)
         except Exception as e:
             LOGGER.error(f"Failed to send packet data: {e}")
             await self.reconnect()
