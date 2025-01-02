@@ -61,27 +61,27 @@ class KocomLightEntity(KocomEntity, LightEntity):
     @property
     def is_on(self) -> bool:
         """Return true if light is on."""
-        if self.device.state.get(BRIGHTNESS):
+        if self.packet._device.state.get(BRIGHTNESS):
             self.has_brightness = True
             self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
             self._attr_color_mode = ColorMode.BRIGHTNESS
-            self.max_brightness = len(self.device.state[LEVEL]) + 1
+            self.max_brightness = len(self.packet._device.state[LEVEL]) + 1
 
-        return self.device.state[POWER]
+        return self.packet._device.state[POWER]
     
     @property
     def brightness(self) -> int:
         """Return the brightness of this light between 0..255."""
-        if self.device.state[BRIGHTNESS] not in self.device.state[LEVEL]:
+        if self.packet._device.state[BRIGHTNESS] not in self.packet._device.state[LEVEL]:
             return 255
-        return ((225 // self.max_brightness) * self.device.state[BRIGHTNESS]) + 1
+        return ((225 // self.max_brightness) * self.packet._device.state[BRIGHTNESS]) + 1
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
         if self.has_brightness:
             brightness = int(kwargs.get(ATTR_BRIGHTNESS, 255))
             brightness = ((brightness * 3) // 225) + 1
-            if brightness not in self.device.state[LEVEL]:
+            if brightness not in self.packet._device.state[LEVEL]:
                 brightness = 255
             make_packet = self.packet.make_brightness_status(brightness)
         else:

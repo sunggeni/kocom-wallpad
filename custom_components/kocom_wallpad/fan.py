@@ -75,12 +75,12 @@ class KocomFanEntity(KocomEntity, FanEntity):
     @property
     def is_on(self) -> bool:
         """Return the state of the fan."""
-        return self.device.state[POWER]
+        return self.packet._device.state[POWER]
 
     @property
     def percentage(self) -> int:
         """Return the current speed percentage."""
-        fan_speed = self.device.state[FAN_SPEED]
+        fan_speed = self.packet._device.state[FAN_SPEED]
         if fan_speed == FanSpeed.OFF:
             return 0
         return ordered_list_item_to_percentage(self._attr_speed_list, fan_speed.value)
@@ -88,7 +88,7 @@ class KocomFanEntity(KocomEntity, FanEntity):
     @property
     def preset_mode(self) -> str:
         """Return the current preset mode."""
-        vent_mode = self.device.state[VENT_MODE]
+        vent_mode = self.packet._device.state[VENT_MODE]
         return vent_mode.name
     
     async def async_set_percentage(self, percentage: int) -> None:

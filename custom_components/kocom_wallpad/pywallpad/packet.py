@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
@@ -12,11 +12,13 @@ from .const import (
     POWER,
     BRIGHTNESS,
     LEVEL,
+    INDEX,
     AWAY_MODE,
     TARGET_TEMP,
     CURRENT_TEMP,
     STATE,
     ERROR_CODE,
+    HOTWATER_STATE,
     HOTWATER_TEMP,
     HEATWATER_TEMP,
     ERROR,
@@ -77,10 +79,11 @@ class KocomPacket:
         self.checksum = packet[18]
         self._last_recv_time = time.time()
         self._device: Device = None
+        self._last_data: dict[str, Any] = {}
 
     def __repr__(self) -> str:
         """Return a string representation of the packet."""
-        return f"KocomPacket(packet_type={self.packet_type}, sequence={self.sequence}, dest={self.dest}, src={self.src}, command={self.command}, value={self.value}, checksum={self.checksum})"
+        return f"KocomPacket(packet_type={self.packet_type.name}, sequence={self.sequence}, dest={self.dest.hex()}, src={self.src.hex()}, command={self.command.name}, value={self.value.hex()}, checksum={hex(self.checksum)})"
     
     @property
     def device_type(self) -> DeviceType:
@@ -113,6 +116,7 @@ class KocomPacket:
         if self.value != bytes(value_packet):
             _LOGGER.debug("Packet value changed from %s to %s", self.value.hex(), value_packet.hex())
             self.value = bytes(value_packet)
+        
         header = bytearray([0x30, 0xBC, 0x00])
         if self.device_type == DeviceType.EV:
             address = self.dest + self.src
@@ -124,42 +128,53 @@ class KocomPacket:
 
 class LightPacket(KocomPacket):
     """Handles packets for light devices."""
-    valid_light_indices: dict[int, dict[int, list[int]]] = {} 
-    # {room_id: {sub_index: [brightness_levels]}}
+
+    _class_last_data: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def __init__(self, packet: bytes) -> None:
+        """Initialize the packet."""
+        super().__init__(packet)
+        if self.device_id not in self._class_last_data:
+            self._class_last_data[self.device_id] = {
+                INDEX: [],
+                BRIGHTNESS: []
+            }
+        self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
         """Parse light-specific data."""
         devices: list[Device] = []
 
-        if self.room_id not in self.valid_light_indices:
-            self.valid_light_indices[self.room_id] = {}
-        
         for i, value in enumerate(self.value[:8]):
             power_state = value == 0xFF
             brightness = value if not power_state else 0
 
-            if power_state and i not in self.valid_light_indices[self.room_id]:
-                self.valid_light_indices[self.room_id][i] = []
-            
-            if (brightness > 0 and 
-                i in self.valid_light_indices[self.room_id] and
-                brightness not in self.valid_light_indices[self.room_id][i]
-            ):
-                self.valid_light_indices[self.room_id][i].append(brightness)
-                self.valid_light_indices[self.room_id][i].sort()
+            if power_state and i not in self._last_data[self.device_id][INDEX]:
+                self._last_data[self.device_id][INDEX].append(i)
+                self._last_data[self.device_id][INDEX].sort()
                 _LOGGER.debug(
-                    "New brightness level discovered - Room: %s, Index: %s, Level: %s, Current levels: %s",
-                    self.room_id, i, brightness, self.valid_light_indices[self.room_id][i]
+                    "New light discovered - Room: %s, Index: %s, Current indices: %s",
+                    self.room_id, i, self._last_data[self.device_id][INDEX]
                 )
             
-            if i in self.valid_light_indices[self.room_id]:
+            if (brightness > 0 and 
+                i in self._last_data[self.device_id][INDEX] and
+                brightness not in self._last_data[self.device_id][BRIGHTNESS]):
+                self._last_data[self.device_id][BRIGHTNESS].append(brightness)
+                self._last_data[self.device_id][BRIGHTNESS].sort()
+                _LOGGER.debug(
+                    "New brightness level discovered - Room: %s, Index: %s, Level: %s, Current levels: %s",
+                    self.room_id, i, brightness, self._last_data[self.device_id][BRIGHTNESS]
+                )
+            
+            if i in self._last_data[self.device_id][INDEX]:
                 state = {POWER: power_state}
-                has_brightness = bool(self.valid_light_indices[self.room_id][i])
+                has_brightness = bool(self._last_data[self.device_id][BRIGHTNESS])
 
                 if has_brightness:
                     state[POWER] = value > 0
                     state[BRIGHTNESS] = brightness
-                    state[LEVEL] = self.valid_light_indices[self.room_id][i]
+                    state[LEVEL] = self._last_data[self.device_id][BRIGHTNESS]
                 
                 device = Device(
                     device_type=self.device_name(),
@@ -193,27 +208,34 @@ class LightPacket(KocomPacket):
 
 class OutletPacket(KocomPacket):
     """Handles packets for outlet devices."""
-    valid_outlet_indices: dict[int, list[int]] = {}
-    # {room_id: [sub_index, ..]}, {room_id: [sub_index, ..]}, ...
+
+    _class_last_data: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def __init__(self, packet: bytes) -> None:
+        """Initialize the packet."""
+        super().__init__(packet)
+        if self.device_id not in self._class_last_data:
+            self._class_last_data[self.device_id] = {
+                INDEX: [],
+            }
+        self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
         """Parse outlet-specific data."""
         devices: list[Device] = []
-
-        if self.room_id not in self.valid_outlet_indices:
-            self.valid_outlet_indices[self.room_id] = []
         
         for i, value in enumerate(self.value[:8]):
             power_state = value == 0xFF
 
-            if power_state and i not in self.valid_outlet_indices[self.room_id]:
-                self.valid_outlet_indices[self.room_id].append(i)
+            if power_state and i not in self._last_data[self.device_id][INDEX]:
+                self._last_data[self.device_id][INDEX].append(i)
+                self._last_data[self.device_id][INDEX].sort()
                 _LOGGER.debug(
                     "New valid outlet discovered - Room: %s, Index: %s, Current valid indices: %s",
-                    self.room_id, i, self.valid_outlet_indices[self.room_id]
+                    self.room_id, i, self._last_data[self.device_id][INDEX]
                 )
 
-            if i in self.valid_outlet_indices[self.room_id]:
+            if i in self._last_data[self.device_id][INDEX]:
                 device = Device(
                     device_type=self.device_name(),
                     room_id=self.room_id,
@@ -239,10 +261,18 @@ class OutletPacket(KocomPacket):
 
 class ThermostatPacket(KocomPacket):
     """Handles packets for thermostat devices."""
-    # Store
-    support_hotwater_sensor = False
-    last_target_temp: dict[str, int] = {}
-    # {room_id: target_temp...}
+
+    _class_last_data: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def __init__(self, packet: bytes) -> None:
+        """Initialize the packet."""
+        super().__init__(packet)
+        if self.device_id not in self._class_last_data:
+            self._class_last_data[self.device_id] = {
+                HOTWATER_STATE: False,
+                TARGET_TEMP: 22,
+            }
+        self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
         """Parse thermostat-specific data."""
@@ -258,15 +288,14 @@ class ThermostatPacket(KocomPacket):
         error_code = self.value[6]
         boiler_error = self.value[7]
         
-        if hotwater_state:
-            self.support_hotwater_sensor = True
-        
-        if self.room_id not in self.last_target_temp:
-            self.last_target_temp[self.room_id] = 22  # default temp
-        
-        if power_state and self.last_target_temp[self.room_id] != target_temp:
-            self.last_target_temp[self.room_id] = target_temp
-        
+        if hotwater_state and not self._last_data[self.device_id][HOTWATER_STATE]:
+            _LOGGER.debug(f"Hotwater state changed to {hotwater_state}.")
+            self._last_data[self.device_id][HOTWATER_STATE] = True
+
+        if power_state and self._last_data[self.device_id][TARGET_TEMP] != target_temp:
+            _LOGGER.debug(f"Target temp changed to {target_temp}.")
+            self._last_data[self.device_id][TARGET_TEMP] = target_temp
+
         devices.append(
             Device(
                 device_type=self.device_name(),
@@ -275,9 +304,9 @@ class ThermostatPacket(KocomPacket):
                 state={
                     POWER: power_state,
                     AWAY_MODE: away_mode,
-                    TARGET_TEMP: self.last_target_temp[self.room_id],
+                    TARGET_TEMP: self._last_data[self.device_id][TARGET_TEMP],
                     CURRENT_TEMP: current_temp,
-                },
+                }
             )
         )
 
@@ -299,9 +328,7 @@ class ThermostatPacket(KocomPacket):
                 )
             )
 
-        if self.support_hotwater_sensor and self.room_id == '0':
-            _LOGGER.debug(f"Supports hot water in thermostat.")
-
+        if self._last_data[self.device_id][HOTWATER_STATE] and self.room_id == '0':
             if hotwater_temp > 0:
                 _LOGGER.debug(f"Supports hot water temperature in thermostat.")
                 devices.append(
@@ -409,15 +436,24 @@ class ACPacket(KocomPacket):
 
 class FanPacket(KocomPacket):
     """Handles packets for fan devices."""
-    # Store
-    support_co2_sensor = False
+    
+    _class_last_data: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def __init__(self, packet: bytes) -> None:
+        """Initialize the packet."""
+        super().__init__(packet)
+        if self.device_id not in self._class_last_data:
+            self._class_last_data[self.device_id] = {
+                CO2: False,
+            }
+        self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
         """Parse fan-specific data."""
         devices: list[Device] = []
 
         power_state = self.value[0] >> 4 == 1
-        co2_sensor = self.value[0] & 0x0F == 1
+        co2 = self.value[0] & 0x0F == 1
         vent_mode = VentMode(self.value[1])
         fan_speed = FanSpeed(self.value[2])
         co2_state = (self.value[4] * 100) + self.value[5]
@@ -426,8 +462,9 @@ class FanPacket(KocomPacket):
         preset_list = list(VentMode.__members__.keys())
         speed_list = list(FanSpeed.__members__.keys())
 
-        if co2_sensor:
-            self.support_co2_sensor = True
+        if co2 and not self._last_data[self.device_id][CO2]:
+            _LOGGER.debug(f"CO2 detected: {co2_state}")
+            self._last_data[self.device_id][CO2] = True
 
         devices.append(
             Device(
@@ -452,8 +489,7 @@ class FanPacket(KocomPacket):
             )
         )
         
-        if self.support_co2_sensor:
-            _LOGGER.debug(f"Supports CO2 sensor in fan.")
+        if self._last_data[self.device_id][CO2]:
             devices.append(
                 Device(
                     device_type=self.device_name(),
@@ -509,7 +545,7 @@ class IAQPacket(KocomPacket):
 
         for sensor_id, state in sensor_mapping.items():
             if state > 0:
-                _LOGGER.debug(f"Supports {sensor_id} in IAQ.")
+                _LOGGER.debug(f"{sensor_id}: {state}")
                 device = Device(
                     device_type=self.device_name(upper=True),
                     device_id=self.device_id,
@@ -566,8 +602,17 @@ class MotionPacket(KocomPacket):
 
 class EVPacket(KocomPacket):
     """Handles packets for EV devices."""
-    # Store
-    support_floor_sensor = False
+
+    _class_last_data: ClassVar[dict[str, dict[str, Any]]] = {}
+
+    def __init__(self, packet: bytes) -> None:
+        """Initialize the packet."""
+        super().__init__(packet)
+        if self.device_id not in self._class_last_data:
+            self._class_last_data[self.device_id] = {
+                FLOOR: False,
+            }
+        self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
         """Parse EV-specific data."""
@@ -577,10 +622,7 @@ class EVPacket(KocomPacket):
         direction_state = Direction(self.value[0])
         floor_state = self.value[1]
 
-        if direction_state == Direction.ARRIVAL:
-            time.sleep(2)
-            direction_state = Direction.IDLE
-        if self.support_floor_sensor:
+        if self._last_data[self.device_id][FLOOR]:
             floor_state = floor_state if floor_state > 0 else "대기"
         
         devices.append(
@@ -601,9 +643,9 @@ class EVPacket(KocomPacket):
             )
         )
 
-        if floor_state > 0 or self.support_floor_sensor:
-            self.support_floor_sensor = True
-            _LOGGER.debug(f"Supports floor sensor in EV.")
+        if floor_state > 0 or self._last_data[self.device_id][FLOOR]:
+            _LOGGER.debug(f"Support EV floor: {floor_state}")
+            self._last_data[self.device_id][FLOOR] = True
             
             devices.append(
                 Device(
@@ -630,12 +672,14 @@ class PacketParser:
 
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
-        """Parse a raw packet into a specific packet class."""
+        """Parse a raw packet into a specific packet class."""            
         device_type = packet_data[7]
+        if packet_data[5] == 0x44 and device_type == 0x01:
+            device_type = 0x44
         return PacketParser._get_packet_instance(device_type, packet_data)
 
     @staticmethod
-    def parse_state(packet: bytes) -> list[KocomPacket]:
+    def parse_state(packet: bytes, last_data: dict[str, Any] = None) -> list[KocomPacket]:
         """Parse device states from a packet."""
         base_packet = PacketParser.parse(packet)
         
@@ -644,6 +688,10 @@ class PacketParser:
             return []
         if base_packet.packet_type == PacketType.RECV and base_packet.command == Command.SCAN:
             return []
+
+        # Update base packet's last_data if provided
+        if last_data:
+            base_packet._last_data.update(last_data)
 
         # Generate packets for each device
         parsed_packets: list[KocomPacket] = []

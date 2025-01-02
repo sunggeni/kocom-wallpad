@@ -67,7 +67,7 @@ class KocomSwitchEntity(KocomEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the switch is on."""
-        return self.device.state[POWER]
+        return self.packet._device.state[POWER]
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on switch."""

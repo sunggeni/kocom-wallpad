@@ -61,15 +61,15 @@ class KocomBinarySensorEntity(KocomEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(gateway, packet)
-        self._attr_is_on = self.device.state[STATE]
+        self._attr_is_on = self.packet._device.state[STATE]
         self._attr_extra_state_attributes = {
-            DEVICE_TYPE: self.device.device_type,
-            ROOM_ID: self.device.room_id,
-            SUB_ID: self.device.sub_id,
-            ERROR_CODE: self.device.state[ERROR_CODE],
+            DEVICE_TYPE: self.packet._device.device_type,
+            ROOM_ID: self.packet._device.room_id,
+            SUB_ID: self.packet._device.sub_id,
+            ERROR_CODE: self.packet._device.state[ERROR_CODE],
         }
 
         if self.packet.device_type == DeviceType.MOTION:
             self._attr_device_class = BinarySensorDeviceClass.MOTION
             del self._attr_extra_state_attributes[ERROR_CODE]
-            self._attr_extra_state_attributes[TIME] = self.device.state[TIME]
+            self._attr_extra_state_attributes[TIME] = self.packet._device.state[TIME]
