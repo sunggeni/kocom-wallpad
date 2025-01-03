@@ -643,7 +643,7 @@ class EVPacket(KocomPacket):
             )
         )
 
-        if floor_state > 0 or self._last_data[self.device_id][FLOOR]:
+        if (isinstance(floor_state, int) and (floor_state > 0)) or self._last_data[self.device_id][FLOOR]:
             _LOGGER.debug(f"Support EV floor: {floor_state}")
             self._last_data[self.device_id][FLOOR] = True
             
@@ -667,27 +667,12 @@ class EVPacket(KocomPacket):
         return super().make_packet(Command.ON, bytearray(self.value))
 
 
-class WallpadPacket(KocomPacket):
-    """Handles packets for wallpad devices."""
-        
-    def parse_class(self) -> KocomPacket:
-        """Parse the class of the packet."""
-        if self.dest[0] == DeviceType.EV.value:
-            self.dest = self.src
-            self.src = self.dest
-            _LOGGER.debug(f"EV device detected on wallpad.")
-            return EVPacket(self.packet)
-        else:
-            _LOGGER.debug(f"Main device detected on wallpad.")
-            return KocomPacket(self.packet)
-
-
 class PacketParser:
     """Parses raw Kocom packets into specific device classes."""
 
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
-        """Parse a raw packet into a specific packet class."""            
+        """Parse a raw packet into a specific packet class."""
         device_type = packet_data[7]
         return PacketParser._get_packet_instance(device_type, packet_data)
 
@@ -728,15 +713,19 @@ class PacketParser:
             DeviceType.GAS.value: GasPacket,
             DeviceType.MOTION.value: MotionPacket,
             DeviceType.EV.value: EVPacket,
-            DeviceType.WALLPAD.value: WallpadPacket,
+            DeviceType.WALLPAD.value: KocomPacket,
         }
 
         packet_class = device_class_map.get(device_type)
         if packet_class is None:
-            _LOGGER.error("Unknown device type: %s, data: %s", format(device_type, 'x'), packet_data.hex())
+            _LOGGER.error(f"Unknown device type: {hex(device_type)}, data: {packet_data.hex()}")
             return KocomPacket(packet_data)
         
-        if packet_class == WallpadPacket:
-            return packet_class(packet_data).parse_class()
+        if packet_data[5] == DeviceType.EV.value and packet_class == KocomPacket:
+            packet_data = bytearray(packet_data)
+            packet_data[5] = 0x01
+            packet_data[7] = 0x44
+            _LOGGER.debug(f"EV device detected from wallpad: {packet_data.hex()}")
+            return EVPacket(bytes(packet_data))
         
         return packet_class(packet_data)
