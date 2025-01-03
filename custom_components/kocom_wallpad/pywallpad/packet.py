@@ -667,6 +667,21 @@ class EVPacket(KocomPacket):
         return super().make_packet(Command.ON, bytearray(self.value))
 
 
+class WallpadPacket(KocomPacket):
+    """Handles packets for wallpad devices."""
+        
+    def parse_class(self) -> KocomPacket:
+        """Parse the class of the packet."""
+        if self.dest[0] == DeviceType.EV.value:
+            self.dest = self.src
+            self.src = self.dest
+            _LOGGER.debug(f"EV device detected on wallpad.")
+            return EVPacket(self.packet)
+        else:
+            _LOGGER.debug(f"Main device detected on wallpad.")
+            return KocomPacket(self.packet)
+
+
 class PacketParser:
     """Parses raw Kocom packets into specific device classes."""
 
@@ -674,8 +689,6 @@ class PacketParser:
     def parse(packet_data: bytes) -> KocomPacket:
         """Parse a raw packet into a specific packet class."""            
         device_type = packet_data[7]
-        if packet_data[5] == 0x44 and device_type == 0x01:
-            device_type = 0x44
         return PacketParser._get_packet_instance(device_type, packet_data)
 
     @staticmethod
@@ -715,12 +728,15 @@ class PacketParser:
             DeviceType.GAS.value: GasPacket,
             DeviceType.MOTION.value: MotionPacket,
             DeviceType.EV.value: EVPacket,
-            DeviceType.WALLPAD.value: KocomPacket,
+            DeviceType.WALLPAD.value: WallpadPacket,
         }
 
         packet_class = device_class_map.get(device_type)
         if packet_class is None:
             _LOGGER.error("Unknown device type: %s, data: %s", format(device_type, 'x'), packet_data.hex())
             return KocomPacket(packet_data)
+        
+        if packet_class == WallpadPacket:
+            return packet_class(packet_data).parse_class()
         
         return packet_class(packet_data)
