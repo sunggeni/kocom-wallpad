@@ -42,3 +42,6 @@ DATE = "date"
 
 DIRECTION = "direction"
 FLOOR = "floor"
+
+SHUTDOWN = "shutdown"
+BELL = "bell"

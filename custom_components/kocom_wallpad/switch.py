@@ -12,13 +12,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .pywallpad.const import POWER
+from .pywallpad.const import POWER, SHUTDOWN
 from .pywallpad.enums import DeviceType
 from .pywallpad.packet import (
     KocomPacket,
     OutletPacket,
     GasPacket,
     EVPacket,
+    PrivatePacket,
+    PublicPacket,
 )
 
 from .gateway import KocomGateway
@@ -37,7 +39,10 @@ async def async_setup_entry(
     @callback
     def async_add_switch(packet: KocomPacket) -> None:
         """Add new switch entity."""
-        if isinstance(packet, (OutletPacket, GasPacket, EVPacket)):
+        if isinstance(
+            packet,
+            (OutletPacket, GasPacket, EVPacket, PrivatePacket, PublicPacket)
+        ):
             async_add_entities([KocomSwitchEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.SWITCH):
@@ -71,10 +76,16 @@ class KocomSwitchEntity(KocomEntity, SwitchEntity):
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on switch."""
-        make_packet = self.packet.make_power_status(True)
+        if self.packet._device.sub_id == SHUTDOWN:
+            make_packet = self.packet.make_shutdown_status(True)
+        else:
+            make_packet = self.packet.make_power_status(True)
         await self.send_packet(make_packet)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off switch."""
-        make_packet = self.packet.make_power_status(False)
+        if self.packet._device.sub_id == SHUTDOWN:
+            make_packet = self.packet.make_shutdown_status(False)
+        else:
+            make_packet = self.packet.make_power_status(False)
         await self.send_packet(make_packet)

@@ -1,6 +1,7 @@
 """Entity classes for Kocom Wallpad."""
 
 from __future__ import annotations
+import asyncio
 
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -110,4 +111,11 @@ class KocomEntity(RestoreEntity):
     
     async def send_packet(self, packet: bytes) -> None:
         """Send a packet to the gateway."""
-        await self.gateway.client.send_packet(packet)
+        if isinstance(packet, list):
+            for item in packet:
+                if isinstance(item, float):
+                    await asyncio.sleep(item)
+                elif isinstance(item, bytearray):
+                    await self.gateway.connection.send(item)
+        else:
+            await self.gateway.client.send_packet(packet)

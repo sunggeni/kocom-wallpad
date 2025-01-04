@@ -20,6 +20,8 @@ from .pywallpad.packet import (
     ThermostatPacket,
     FanPacket,
     MotionPacket,
+    PrivatePacket,
+    PublicPacket,
 )
 
 from .gateway import KocomGateway
@@ -38,7 +40,10 @@ async def async_setup_entry(
     @callback
     def async_add_binary_sensor(packet: KocomPacket) -> None:
         """Add new binary sensor entity."""
-        if isinstance(packet, (ThermostatPacket, FanPacket, MotionPacket)):
+        if isinstance(
+            packet, 
+            (ThermostatPacket, FanPacket, MotionPacket, PrivatePacket, PublicPacket)
+        ):
             async_add_entities([KocomBinarySensorEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.BINARY_SENSOR):
@@ -66,10 +71,13 @@ class KocomBinarySensorEntity(KocomEntity, BinarySensorEntity):
             DEVICE_TYPE: self.packet._device.device_type,
             ROOM_ID: self.packet._device.room_id,
             SUB_ID: self.packet._device.sub_id,
-            ERROR_CODE: self.packet._device.state[ERROR_CODE],
+            ERROR_CODE: self.packet._device.state.get(ERROR_CODE),
         }
 
         if self.packet.device_type == DeviceType.MOTION:
             self._attr_device_class = BinarySensorDeviceClass.MOTION
             del self._attr_extra_state_attributes[ERROR_CODE]
             self._attr_extra_state_attributes[TIME] = self.packet._device.state[TIME]
+        if self.packet.device_type in {DeviceType.PRIVATE, DeviceType.PUBLIC}:
+            self._attr_device_class = None
+            del self._attr_extra_state_attributes[ERROR_CODE]

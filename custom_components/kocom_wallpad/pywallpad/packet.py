@@ -37,6 +37,8 @@ from .const import (
     TIME,
     DIRECTION,
     FLOOR,
+    SHUTDOWN,
+    BELL,
 )
 from .enums import (
     DeviceType,
@@ -80,7 +82,7 @@ class KocomPacket:
         self.value = packet[10:18]
         self.checksum = packet[18]
 
-        self._main_address = self.src
+        self._address = self.src
         self._last_recv_time = time.time()
         self._device: Device = None
         self._last_data: dict[str, Any] = {}
@@ -92,25 +94,23 @@ class KocomPacket:
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
-        if self.dest[0] == DeviceType.WALLPAD.value:
-            self._main_address = self.src
-            return DeviceType(self.src[0])
-        self._main_address = self.dest
-        return DeviceType(self.dest[0])
+        if self._address[0] in {DeviceType.WALLPAD.value, DeviceType.NONE.value}:
+            self._address = self.dest
+        return DeviceType(self._address[0])
     
     @property
     def room_id(self) -> str:
         """Return the room ID."""
-        return str(self._main_address[1])
+        return str(self._address[1])
     
     @property
     def device_id(self) -> str:
         """Return the device ID."""
         return f"{self.device_name()}_{self.room_id}"
     
-    def device_name(self, upper=False) -> str:
+    def device_name(self, capital=False) -> str:
         """Return the device name."""
-        if upper:
+        if capital:
             return self.device_type.name.upper()
         return self.device_type.name.lower()
     
@@ -127,9 +127,9 @@ class KocomPacket:
         
         header = bytearray([0x30, 0xBC, 0x00])
         if self.device_type == DeviceType.EV:
-            address = bytearray([0x01, 0x00]) + bytearray(self._main_address)
+            address = bytearray([0x01, 0x00]) + bytearray(self._address)
         else:
-            address = bytearray(self._main_address) + bytearray([0x01, 0x00])
+            address = bytearray(self._address) + bytearray([0x01, 0x00])
         command_byte = bytearray([command.value])
         return header + address + command_byte + value_packet
 
@@ -399,7 +399,7 @@ class ACPacket(KocomPacket):
         target_temp = self.value[5]
 
         device = Device(
-            device_type=self.device_name(upper=True),
+            device_type=self.device_name(capital=True),
             room_id=self.room_id,
             device_id=self.device_id,
             state={
@@ -554,7 +554,7 @@ class IAQPacket(KocomPacket):
             if state > 0:
                 _LOGGER.debug(f"{sensor_id}: {state}")
                 device = Device(
-                    device_type=self.device_name(upper=True),
+                    device_type=self.device_name(capital=True),
                     device_id=self.device_id,
                     state={STATE: state},
                     sub_id=sensor_id,
@@ -631,7 +631,7 @@ class EVPacket(KocomPacket):
         
         devices.append(
             Device(
-                device_type=self.device_name(upper=True),
+                device_type=self.device_name(capital=True),
                 room_id=self.room_id,
                 device_id=self.device_id,
                 state={POWER: power_state},
@@ -639,7 +639,7 @@ class EVPacket(KocomPacket):
         )
         devices.append(
             Device(
-                device_type=self.device_name(upper=True),
+                device_type=self.device_name(capital=True),
                 room_id=self.room_id,
                 device_id=self.device_id,
                 state={STATE: direction_state.name},
@@ -653,7 +653,7 @@ class EVPacket(KocomPacket):
             
             devices.append(
                 Device(
-                    device_type=self.device_name(upper=True),
+                    device_type=self.device_name(capital=True),
                     room_id=self.room_id,
                     device_id=self.device_id,
                     state={STATE: floor_state},
@@ -671,16 +671,120 @@ class EVPacket(KocomPacket):
         return super().make_packet(Command.ON, bytearray(self.value))
 
 
+class PrivatePacket(KocomPacket):
+    """Handles packets for intercom private devices."""
+
+    def parse_data(self) -> list[Device]:
+        """Parse intercom private-specific data."""
+        devices: list[Device] = []
+        power_state = False
+        bell_state = (
+            self.value[2] == 0x31 and (self.value[5] == 0x01 and self.value[6] == 0x01)
+        )
+        devices.append(
+            Device(
+                device_type=f"{self.endpoint.name.lower()}",
+                device_id=f"{self.endpoint.name.lower()}_private",
+                room_id="private",
+                state={POWER: power_state},
+            )
+        )
+        devices.append(
+            Device(
+                device_type=f"{self.endpoint.name.lower()}",
+                device_id=f"{self.endpoint.name.lower()}_private",
+                room_id="private",
+                state={POWER: power_state},
+                sub_id=SHUTDOWN,
+            )
+        )
+        devices.append(
+            Device(
+                device_type=f"{self.endpoint.name.lower()}",
+                device_id=f"{self.endpoint.name.lower()}_private",
+                room_id="private",
+                state={STATE: bell_state},
+                sub_id=BELL,
+            )
+        )
+        return devices
+    
+    def make_power_status(self, power: bool) -> list[bytearray | float]:
+        """Make a power status packet."""
+        if not power:
+            _LOGGER.debug(f"Intercom private device is off. Ignoring power status.")
+            return
+        return [
+            bytearray.fromhex('AA5579BC02020031FFFFFF61FFFFFF030008D30D0D'),
+            1.0,
+            bytearray.fromhex('AA5579BC02020031FFFFFF61FFFFFF240097A20D0D'),
+            0.1,
+            bytearray.fromhex('AA5579BC02020031FFFFFF61FFFFFF040091440D0D'),
+        ]
+    
+    def make_shutdown_status(self, shutdown: bool) -> list[bytearray | float]:
+        """Make a shutdown status packet."""
+        if not shutdown:
+            _LOGGER.debug(f"Intercom private device is off. Ignoring shutdown status.")
+            return
+        return [
+            bytearray.fromhex('AA5579BC02020031FFFFFF61FFFFFF030008D30D0D'),
+            1.0,
+            bytearray.fromhex('AA5579BC02020031FFFFFF61FFFFFF040091440D0D'),
+        ]
+
+
+class PublicPacket(KocomPacket):
+    """Handles packets for intercom public devices."""
+
+    def parse_data(self) -> list[Device]:
+        """Parse intercom public-specific data."""
+        devices: list[Device] = []
+        power_state = False
+        bell_state = self.value[5] == 0x01 and self.value[6] == 0x01
+        devices.append(
+            Device(
+                device_type=f"{self.endpoint.name.lower()}",
+                device_id=f"{self.endpoint.name.lower()}_public",
+                room_id="public",
+                state={POWER: power_state},
+            )
+        )
+        devices.append(
+            Device(
+                device_type=f"{self.endpoint.name.lower()}",
+                device_id=f"{self.endpoint.name.lower()}_public",
+                room_id="public",
+                state={STATE: bell_state},
+                sub_id=BELL,
+            )
+        )
+        return devices
+    
+    def make_power_status(self, power: bool) -> list[bytearray | float]:
+        """Make a power status packet."""
+        if not power:
+            _LOGGER.debug(f"Intercom public device is off. Ignoring power status.")
+            return
+        return [
+            bytearray.fromhex('AA5579BC080200FFFFFFFF61FFFFFF030026950D0D'),
+            0.5,
+            bytearray.fromhex('AA5579BC080200FFFFFFFF61FFFFFF2400B9E40D0D'),
+        ]
+
+
 class PacketParser:
     """Parses raw Kocom packets into specific device classes."""
 
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
         """Parse a raw packet into a specific packet class."""
-        if packet_data[5] == DeviceType.WALLPAD.value:
-            device_type = packet_data[7]
-        else:
+        if (packet_data[4] == Endpoint.INTERCOM.value 
+            or packet_data[7] == DeviceType.WALLPAD.value
+        ):
             device_type = packet_data[5]
+        else:
+            device_type = packet_data[7]
         return PacketParser._get_packet_instance(device_type, packet_data)
 
     @staticmethod
@@ -688,10 +792,13 @@ class PacketParser:
         """Parse device states from a packet."""
         base_packet = PacketParser.parse(packet)
         
-        # Skip unsupported packet types
-        #if base_packet.device_type == DeviceType.WALLPAD:
-        #    return []
-        if base_packet.packet_type == PacketType.RECV and base_packet.command == Command.SCAN:
+        if (base_packet.endpoint == Endpoint.INTERCOM 
+            and base_packet.packet_type != PacketType.CALL
+        ):
+            []
+        if (base_packet.packet_type == PacketType.RECV 
+            and base_packet.command == Command.SCAN
+        ):
             return []
 
         # Update base packet's last_data if provided
@@ -721,6 +828,8 @@ class PacketParser:
             DeviceType.MOTION.value: MotionPacket,
             DeviceType.EV.value: EVPacket,
             DeviceType.WALLPAD.value: KocomPacket,
+            DeviceType.PRIVATE.value: PrivatePacket,  # intercom private
+            DeviceType.PUBLIC.value: PublicPacket,    # intercom public
         }
 
         packet_class = device_class_map.get(device_type)

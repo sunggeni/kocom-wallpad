@@ -18,9 +18,11 @@ class DeviceType(IntEnum):
     MOTION = 0x60
     IGNORE = 0x86
     IAQ = 0x98
+    NONE = 0xFF
 
 class PacketType(IntEnum):
     """Packet types for Kocom devices."""
+    CALL = 0x09
     SEND = 0x0B
     RECV = 0x0D
 
@@ -36,6 +38,7 @@ class Command(IntEnum):
     OFF = 0x02
     DETECT = 0x04
     SCAN = 0x3A
+    NONE = 0xFF
 
 class OpMode(IntEnum):
     """Operating modes for AC devices."""

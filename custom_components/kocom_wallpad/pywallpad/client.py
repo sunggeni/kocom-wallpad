@@ -8,7 +8,7 @@ from typing import Optional, Callable, Awaitable
 
 from ..connection import Connection
 
-from .crc import verify_checksum, calculate_checksum
+from .crc import verify_checksum, verify_crc, calculate_checksum
 from .packet import PacketParser
 from .const import _LOGGER, PREFIX_HEADER, SUFFIX_HEADER
 
@@ -100,18 +100,17 @@ class KocomClient:
                 
                 packet_list = self.extract_packets(receive_data)
                 for packet in packet_list:
-                    if not verify_checksum(packet):
-                        _LOGGER.debug("Checksum verification failed for packet: %s", packet.hex())
-                        continue
-
-                    parsed_packets = PacketParser.parse_state(packet)
-                    for parsed_packet in parsed_packets:
-                        _LOGGER.debug(
-                            "Received packet: %s, %s, %s", 
-                            parsed_packet, parsed_packet._device, parsed_packet._last_data
-                        )
-                        for callback in self.device_callbacks:
-                            await callback(parsed_packet)
+                    if verify_checksum(packet) or verify_crc(packet):
+                        parsed_packets = PacketParser.parse_state(packet)
+                        for parsed_packet in parsed_packets:
+                            _LOGGER.debug(
+                                "Received packet: %s, %s, %s", 
+                                parsed_packet, parsed_packet._device, parsed_packet._last_data
+                            )
+                            for callback in self.device_callbacks:
+                                await callback(parsed_packet)
+                    else:
+                        _LOGGER.debug("Received invalid packet: %s", packet.hex())
             except Exception as e:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
     
