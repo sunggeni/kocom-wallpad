@@ -5,6 +5,8 @@ from enum import IntEnum
 class DeviceType(IntEnum):
     """Device types for Kocom devices."""
     WALLPAD = 0x01
+    PRIVATE = 0x02  # 세대현관
+    PUBLIC = 0x08   # 공동현관
     LIGHT = 0x0E
     GAS = 0x2C
     DOORLOCK = 0x33
@@ -17,6 +19,16 @@ class DeviceType(IntEnum):
     IGNORE = 0x86
     IAQ = 0x98
 
+class PacketType(IntEnum):
+    """Packet types for Kocom devices."""
+    SEND = 0x0B
+    RECV = 0x0D
+
+class Endpoint(IntEnum):
+    """Endpoints for Kocom devices."""
+    WALLPAD = 0x00
+    INTERCOM = 0x02
+
 class Command(IntEnum):
     """Commands for Kocom devices."""
     STATUS = 0x00
@@ -24,11 +36,6 @@ class Command(IntEnum):
     OFF = 0x02
     DETECT = 0x04
     SCAN = 0x3A
-
-class PacketType(IntEnum):
-    """Packet types for Kocom devices."""
-    SEND = 0x0B
-    RECV = 0x0D
 
 class OpMode(IntEnum):
     """Operating modes for AC devices."""

@@ -41,6 +41,7 @@ from .const import (
 from .enums import (
     DeviceType,
     PacketType,
+    Endpoint,
     Command,
     OpMode,    # AC 
     FanMode,   # AC
@@ -72,28 +73,35 @@ class KocomPacket:
         self.packet = packet
         self.packet_type = PacketType(packet[3] >> 4)
         self.sequence = packet[3] & 0x0F
+        self.endpoint = Endpoint(packet[4])
         self.dest = packet[5:7]
         self.src = packet[7:9]
         self.command = Command(packet[9])
         self.value = packet[10:18]
         self.checksum = packet[18]
+
+        self._main_address = self.src
         self._last_recv_time = time.time()
         self._device: Device = None
         self._last_data: dict[str, Any] = {}
 
     def __repr__(self) -> str:
         """Return a string representation of the packet."""
-        return f"KocomPacket(packet_type={self.packet_type.name}, sequence={self.sequence}, dest={self.dest.hex()}, src={self.src.hex()}, command={self.command.name}, value={self.value.hex()}, checksum={hex(self.checksum)})"
+        return f"KocomPacket(packet_type={self.packet_type.name}, sequence={self.sequence}, endpoint={self.endpoint.name}, dest={self.dest.hex()}, src={self.src.hex()}, command={self.command.name}, value={self.value.hex()}, checksum={hex(self.checksum)})"
     
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
-        return DeviceType(self.src[0])
+        if self.dest[0] == DeviceType.WALLPAD.value:
+            self._main_address = self.src
+            return DeviceType(self.src[0])
+        self._main_address = self.dest
+        return DeviceType(self.dest[0])
     
     @property
     def room_id(self) -> str:
         """Return the room ID."""
-        return str(self.src[1])
+        return str(self._main_address[1])
     
     @property
     def device_id(self) -> str:
@@ -119,11 +127,11 @@ class KocomPacket:
         
         header = bytearray([0x30, 0xBC, 0x00])
         if self.device_type == DeviceType.EV:
-            address = self.dest + self.src
+            address = bytearray([0x01, 0x00]) + bytearray(self._main_address)
         else:
-            address = self.src + self.dest
+            address = bytearray(self._main_address) + bytearray([0x01, 0x00])
         command_byte = bytearray([command.value])
-        return header + bytearray(address) + command_byte + value_packet
+        return header + address + command_byte + value_packet
 
 
 class LightPacket(KocomPacket):
@@ -453,7 +461,6 @@ class FanPacket(KocomPacket):
         devices: list[Device] = []
 
         power_state = self.value[0] >> 4 == 1
-        co2 = self.value[0] & 0x0F == 1
         vent_mode = VentMode(self.value[1])
         fan_speed = FanSpeed(self.value[2])
         co2_state = (self.value[4] * 100) + self.value[5]
@@ -462,7 +469,7 @@ class FanPacket(KocomPacket):
         preset_list = list(VentMode.__members__.keys())
         speed_list = list(FanSpeed.__members__.keys())
 
-        if co2 and not self._last_data[self.device_id][CO2]:
+        if co2_state > 0 or self._last_data[self.device_id][CO2]:
             _LOGGER.debug(f"CO2 detected: {co2_state}")
             self._last_data[self.device_id][CO2] = True
 
@@ -621,9 +628,6 @@ class EVPacket(KocomPacket):
         power_state = False
         direction_state = Direction(self.value[0])
         floor_state = self.value[1]
-
-        if self._last_data[self.device_id][FLOOR]:
-            floor_state = floor_state if floor_state > 0 else "대기"
         
         devices.append(
             Device(
@@ -643,7 +647,7 @@ class EVPacket(KocomPacket):
             )
         )
 
-        if (isinstance(floor_state, int) and (floor_state > 0)) or self._last_data[self.device_id][FLOOR]:
+        if floor_state > 0 or self._last_data[self.device_id][FLOOR]:
             _LOGGER.debug(f"Support EV floor: {floor_state}")
             self._last_data[self.device_id][FLOOR] = True
             
@@ -673,7 +677,10 @@ class PacketParser:
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
         """Parse a raw packet into a specific packet class."""
-        device_type = packet_data[7]
+        if packet_data[5] == DeviceType.WALLPAD.value:
+            device_type = packet_data[7]
+        else:
+            device_type = packet_data[5]
         return PacketParser._get_packet_instance(device_type, packet_data)
 
     @staticmethod
@@ -682,8 +689,8 @@ class PacketParser:
         base_packet = PacketParser.parse(packet)
         
         # Skip unsupported packet types
-        if base_packet.device_type == DeviceType.WALLPAD:
-            return []
+        #if base_packet.device_type == DeviceType.WALLPAD:
+        #    return []
         if base_packet.packet_type == PacketType.RECV and base_packet.command == Command.SCAN:
             return []
 
@@ -720,12 +727,5 @@ class PacketParser:
         if packet_class is None:
             _LOGGER.error(f"Unknown device type: {hex(device_type)}, data: {packet_data.hex()}")
             return KocomPacket(packet_data)
-        
-        if packet_data[5] == DeviceType.EV.value and packet_class == KocomPacket:
-            packet_data = bytearray(packet_data)
-            packet_data[5] = 0x01
-            packet_data[7] = 0x44
-            _LOGGER.debug(f"EV device detected from wallpad: {packet_data.hex()}")
-            return EVPacket(bytes(packet_data))
         
         return packet_class(packet_data)
