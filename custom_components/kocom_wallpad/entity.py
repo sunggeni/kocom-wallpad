@@ -1,8 +1,8 @@
 """Entity classes for Kocom Wallpad."""
 
 from __future__ import annotations
-import asyncio
 
+from homeassistant.const import CONF_UNIQUE_ID
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity, RestoredExtraData
@@ -43,14 +43,15 @@ class KocomEntity(RestoreEntity):
         self.packet = packet
         self.packet_update_signal = f"{DOMAIN}_{self.gateway.host}_{self.device_id}"
         
-        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}-{self.gateway.host}"
+        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}-{self.gateway.host}".lower()
         self._attr_name = f"{BRAND_NAME} {self.device_name}"
         self._attr_extra_state_attributes = {
             DEVICE_TYPE: self.packet._device.device_type,
             ROOM_ID: self.packet._device.room_id,
             SUB_ID: self.packet._device.sub_id,
+            CONF_UNIQUE_ID: self.unique_id,
         }
-        
+
     @property
     def device_id(self) -> str:
         """Return the device id."""
@@ -69,18 +70,20 @@ class KocomEntity(RestoreEntity):
     def device_info(self) -> DeviceInfo:
         """Return the device information."""
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.gateway.host}_{self.packet._device.device_type}")},
+            identifiers={
+                (DOMAIN, f"{BRAND_NAME}_{self.packet._device.device_type}_{self.gateway.entry.unique_id}".lower())
+            },
             manufacturer=MANUFACTURER,
             model=MODEL,
             name=f"{BRAND_NAME} {process_string(self.packet._device.device_type)}",
             sw_version=SW_VERSION,
-            via_device=(DOMAIN, self.gateway.host),
+            via_device=(DOMAIN, self.gateway.entry.unique_id),
         )
         
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return self.gateway.connection.is_connected()
+        return self.gateway.connection.is_connected
     
     @callback
     def async_handle_packet_update(self, packet: KocomPacket) -> None:
@@ -109,13 +112,8 @@ class KocomEntity(RestoreEntity):
         }
         return RestoredExtraData(extra_data)
     
-    async def send_packet(self, packet: bytes) -> None:
+    async def send_packet(
+        self, packet: bytearray | list[tuple[bytearray, float | None]]
+    ) -> None:
         """Send a packet to the gateway."""
-        if isinstance(packet, list):
-            for item in packet:
-                if isinstance(item, float):
-                    await asyncio.sleep(item)
-                elif isinstance(item, bytearray):
-                    await self.gateway.connection.send(item)
-        else:
-            await self.gateway.client.send_packet(packet)
+        return await self.gateway.client.send_packet(packet)

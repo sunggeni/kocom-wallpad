@@ -10,26 +10,26 @@ from homeassistant.helpers import entity_registry as er, restore_state
 
 from dataclasses import dataclass
 
-from .pywallpad.client import KocomClient
+from .pywallpad.client import KocomClient, verify_crc
 from .pywallpad.const import (
     ERROR,
     CO2,
     TEMPERATURE,
     DIRECTION,
     FLOOR,
-    BELL,
+    RING,
 )
 from .pywallpad.packet import (
     KocomPacket,
     ThermostatPacket,
     FanPacket,
     EVPacket,
-    PrivatePacket,
-    PublicPacket,
+    DoorPhonePacket,
     PacketParser,
+    DoorPhoneParser,
 )
 
-from .connection import Connection
+from .connection import RS485Connection
 from .util import create_dev_id, decode_base64_to_bytes
 from .const import LOGGER, DOMAIN, PACKET_DATA, LAST_DATA, PLATFORM_MAPPING
 
@@ -44,7 +44,7 @@ class KocomGateway:
         self.host = entry.data.get(CONF_HOST)
         self.port = entry.data.get(CONF_PORT)
 
-        self.connection = Connection(self.host, self.port)
+        self.connection = RS485Connection(self.host, self.port)
         self.client: KocomClient = KocomClient(self.connection)
         self.entities: dict[Platform, dict[str, KocomPacket]] = {}
     
@@ -52,7 +52,7 @@ class KocomGateway:
         """Connect to the gateway."""
         try:
             await self.connection.connect()
-            return self.connection.is_connected()
+            return self.connection.is_connected
         except Exception as e:
             LOGGER.error(f"Failed to connect to the gateway: {e}")
             return False
@@ -62,7 +62,7 @@ class KocomGateway:
         if self.client:
             await self.client.stop()
         self.entities.clear()
-        await self.connection.close()
+        await self.connection.disconnect()
 
     async def async_start(self) -> None:
         """Start the gateway."""
@@ -92,7 +92,9 @@ class KocomGateway:
         packet = decode_base64_to_bytes(packet_data)
         last_data = state.extra_data.as_dict().get(LAST_DATA)
         LOGGER.debug(f"Last data: {last_data}")
-
+        
+        if verify_crc(packet):
+            return DoorPhoneParser.parse_state(packet, last_data)
         return PacketParser.parse_state(packet, last_data)
     
     async def async_update_entity_registry(self) -> None:
@@ -135,9 +137,7 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        platform_packet_types = (
-            ThermostatPacket, FanPacket, EVPacket, PrivatePacket, PublicPacket
-        )
+        platform_packet_types = (ThermostatPacket, FanPacket, EVPacket, DoorPhonePacket)
         if isinstance(packet, platform_packet_types) and (sub_id := packet._device.sub_id):
             if ERROR in sub_id:
                 platform = Platform.BINARY_SENSOR
@@ -147,7 +147,7 @@ class KocomGateway:
                 platform = Platform.SENSOR
             elif sub_id in {DIRECTION, FLOOR}:  # EV
                 platform = Platform.SENSOR
-            elif sub_id in BELL:  # Intercom
+            elif sub_id in RING:  # DoorPhone
                 platform = Platform.BINARY_SENSOR
                 
         return platform
