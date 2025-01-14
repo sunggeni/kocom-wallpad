@@ -34,10 +34,10 @@ class DoorPhoneCommand(IntEnum):
     INVOKE = 0x09
     CONTROL = 0x0B
 
-class DoorPhoneEntrance(IntEnum):
+class DoorPhoneEntrance(StrEnum):
     """Door phone entrance types."""
-    PRIVATE = 0x02
-    PUBLIC = 0x08
+    PRIVATE = "private"
+    PUBLIC = "public"
 
 class DoorPhoneEventType(IntEnum):
     """Door phone event types."""

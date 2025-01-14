@@ -15,13 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .pywallpad.const import STATE, CODE, TIME
 from .pywallpad.enums import DeviceType
-from .pywallpad.packet import (
-    KocomPacket,
-    ThermostatPacket,
-    FanPacket,
-    MotionPacket,
-    DoorPhonePacket,
-)
+from .pywallpad.packet import KocomPacket
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -39,8 +33,7 @@ async def async_setup_entry(
     @callback
     def async_add_binary_sensor(packet: KocomPacket) -> None:
         """Add new binary sensor entity."""
-        if isinstance(packet, (ThermostatPacket, FanPacket, MotionPacket, DoorPhonePacket)):
-            async_add_entities([KocomBinarySensorEntity(gateway, packet)])
+        async_add_entities([KocomBinarySensorEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.BINARY_SENSOR):
         async_add_binary_sensor(entity)

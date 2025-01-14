@@ -36,6 +36,8 @@ from .const import (
     FLOOR,
     RING,
     SHUTDOWN,
+    ONCE,
+    ALWAYS,
 )
 from .enums import (
     PacketType,
@@ -269,10 +271,9 @@ class ThermostatPacket(KocomPacket):
         super().__init__(packet)
         if self.device_id not in self._class_last_data:
             self._class_last_data[self.device_id] = {
-                "is_hw_temp": False,   # Hot water temperature
-                "is_hwt_temp": False,  # Heat water temperature
-                "last_set_temp": 22,
+                "last_target_temp": 22,
             }
+            self._class_last_data["is_hotwater"] = False
         self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
@@ -289,9 +290,9 @@ class ThermostatPacket(KocomPacket):
         error_code = f"{self.value[6]:02}"
         is_error = error_code != "00"
 
-        if is_on and self._last_data[self.device_id]["last_set_temp"] != target_temp:
+        if is_on and self._last_data[self.device_id]["last_target_temp"] != target_temp:
             _LOGGER.debug(f"New target temperature: {target_temp}")
-            self._last_data[self.device_id]["last_set_temp"] = target_temp
+            self._last_data[self.device_id]["last_target_temp"] = target_temp
 
         devices.append(
             Device(
@@ -301,52 +302,52 @@ class ThermostatPacket(KocomPacket):
                 state={
                     POWER: is_on,
                     AWAY: is_away,
-                    TARGET_TEMP: self._last_data[self.device_id]["last_set_temp"],
+                    TARGET_TEMP: self._last_data[self.device_id]["last_target_temp"],
                     CURRENT_TEMP: current_temp,
                 }
             )
         )
+        devices.append(
+            Device(
+                device_type=self.device_name(),
+                device_id=self.device_id,
+                state={STATE: is_error, CODE: error_code},
+                sub_id=ERROR,
+            )
+        )
 
-        if self.room_id == "0":  # Main Controller
-            #devices.append(
-            #    Device(
-            #        device_type=self.device_name(),
-            #        device_id=self.device_id,
-            #        state={POWER: is_hotwater},
-            #        sub_id=HOTWATER,
-            #    )
-            #)
+        #if is_hotwater or self._last_data["is_hotwater"]:
+        #    _LOGGER.debug(f"Hot water: {is_hotwater}")
+        #    self._last_data["is_hotwater"] = True
+        #    devices.append(
+        #        Device(
+        #            device_type=self.device_name(),
+        #            device_id=self.device_id,
+        #            state={POWER: is_hotwater},
+        #            sub_id=HOTWATER,
+        #        )
+        #    )
+
+        if hotwater_temp > 0:
+            _LOGGER.debug(f"Hot water temperature: {hotwater_temp}.")
             devices.append(
                 Device(
                     device_type=self.device_name(),
                     device_id=self.device_id,
-                    state={STATE: is_error, CODE: error_code},
-                    sub_id=ERROR,
+                    state={STATE: hotwater_temp},
+                    sub_id=f"{HOTWATER} {TEMPERATURE}",
                 )
             )
-
-            if hotwater_temp > 0 or self._last_data[self.device_id]["is_hw_temp"]:
-                _LOGGER.debug(f"Hot water temperature: {hotwater_temp}.")
-                self._last_data[self.device_id]["is_hw_temp"] = True
-                devices.append(
-                    Device(
-                        device_type=self.device_name(),
-                        device_id=self.device_id,
-                        state={STATE: hotwater_temp},
-                        sub_id=f"{HOTWATER} {TEMPERATURE}",
-                    )
+        if heatwater_temp > 0:
+            _LOGGER.debug(f"Heat water temperature: {heatwater_temp}.")
+            devices.append(
+                Device(
+                    device_type=self.device_name(),
+                    device_id=self.device_id,
+                    state={STATE: heatwater_temp},
+                    sub_id=f"{HEATWATER} {TEMPERATURE}",
                 )
-            if heatwater_temp > 0 or self._last_data[self.device_id]["is_hwt_temp"]:
-                _LOGGER.debug(f"Heat water temperature: {heatwater_temp}.")
-                self._last_data[self.device_id]["is_hwt_temp"] = True
-                devices.append(
-                    Device(
-                        device_type=self.device_name(),
-                        device_id=self.device_id,
-                        state={STATE: heatwater_temp},
-                        sub_id=f"{HEATWATER} {TEMPERATURE}",
-                    )
-                )
+            )
             
         return devices
     
@@ -357,15 +358,12 @@ class ThermostatPacket(KocomPacket):
     def make_power_status(self, power: bool) -> bytearray:
         """Make a power status packet."""
         value = bytearray(self.value)
-        value[0] = 0x11 if power else 0x01
-        value[1] = 0x00
-        return super().make_packet(Command.STATUS, value)
-    
-    def make_hotwater_status(self, hotwater: bool) -> bytearray:
-        """Make a hot water status packet."""
-        value = bytearray(self.value)
-        value[0] = 0x12 if hotwater else 0x11
-        value[1] = 0x00
+        if power:
+            value[0] = 0x11
+            value[1] = 0x00
+        else:
+            value[0] = 0x00
+            value[1] = 0x01
         return super().make_packet(Command.STATUS, value)
     
     def make_away_status(self, away_mode: bool) -> bytearray:
@@ -491,9 +489,6 @@ class FanPacket(KocomPacket):
         error_code = f"{self.value[7]:02}"
         is_error = error_code != "00"
 
-        if co2_ppm != 0:
-            self._class_last_data[self.device_id]["is_co2_sensor"] = True
-
         devices.append(
             Device(
                 device_type=self.device_name(),
@@ -515,8 +510,9 @@ class FanPacket(KocomPacket):
             )
         )
         
-        if self._last_data[self.device_id]["is_co2_sensor"]:
-            _LOGGER.debug(f"CO2 sensor: {co2_ppm}")
+        if co2_ppm > 0 or self._class_last_data[self.device_id]["is_co2_sensor"]:
+            _LOGGER.debug(f"CO2 ppm: {co2_ppm}")
+            self._class_last_data[self.device_id]["is_co2_sensor"] = True
             devices.append(
                 Device(
                     device_type=self.device_name(),
@@ -666,7 +662,7 @@ class EVPacket(KocomPacket):
         self._last_data.update(self._class_last_data)
         self._ev_invoke = False
         self._ev_direction = self.Direction(self.value[0])
-        self._ev_floor = str(self.value[1])
+        self._ev_floor = f"{str(self.value[1]):02}"
 
     def parse_data(self) -> list[Device]:
         """Parse EV-specific data."""
@@ -680,8 +676,6 @@ class EVPacket(KocomPacket):
                 state={POWER: self._ev_invoke},
             )
         )
-        self._ev_invoke = False
-
         devices.append(
             Device(
                 device_type=self.device_name(capital=True),
@@ -691,14 +685,11 @@ class EVPacket(KocomPacket):
                 sub_id=DIRECTION,
             )
         )
-        
-        if self._ev_direction == self.Direction.ARRIVAL:
-            self._ev_direction = self.Direction.IDLE
 
         if int(self._ev_floor) >> 4 == 0x08:   # 지하 층
             self._ev_floor = f"B{str(int(self._ev_floor) & 0x0F)}"
 
-        if self._ev_floor != "0" or self._last_data[self.device_id]["avil_floor"]:
+        if self._ev_floor != "00" or self._last_data[self.device_id]["avil_floor"]:
             self._last_data[self.device_id]["avil_floor"] = True
             self._last_data[self.device_id]["last_floor"] = self._ev_floor
             _LOGGER.debug(f"EV floor: {self._ev_floor}")
@@ -712,6 +703,10 @@ class EVPacket(KocomPacket):
                     sub_id=FLOOR,
                 )
             )
+        
+        if self._ev_direction == self.Direction.ARRIVAL:
+            self._ev_invoke = False
+            self._ev_direction = self.Direction.IDLE
         
         return devices
     
@@ -792,7 +787,12 @@ class DoorPhonePacket:
     def __init__(self, packet: bytes) -> None:
         """Initialize the DoorPhonePacket."""
         self.packet = packet
-        self.command_byte = packet[3] >> 4
+        self.dest = packet[4]
+        self.src = packet[5]
+        self.src2 = packet[11]
+        self.event = packet[15]
+        self.event2 = packet[16]
+
         self.device_type = "doorphone"
         self.room_id = self.entrance_type.name.lower()
         self.device_id = f"{self.device_type}_{self.room_id}"
@@ -803,69 +803,53 @@ class DoorPhonePacket:
     
         self._last_data[self.device_id].update({
             "ringing_time": None,
-            "ringing_state": False,
         })
+        self._last_data["phone_id"] = None
         self._phone_opening = False
         self._phone_exiting = False
 
     def __repr__(self) -> str:
         """Return a string representation of the DoorPhonePacket."""
-        return f"DoorPhonePacket(packet={self.packet.hex()}, command_byte={self.command_byte:#x}, device_type={self.device_type}, room_id={self.room_id}, device_id={self.device_id})"
+        return f"DoorPhonePacket(packet={self.packet.hex()}, dest={self.dest}, src={self.src}, src2={self.src2}, event={self.event}, event2={self.event2})"
     
     @property
-    def command_type(self) -> DoorPhoneCommand | None:
-        """Get the command type."""
-        try:
-            return DoorPhoneCommand(self.command_byte)
-        except ValueError:
-            _LOGGER.error(f"Unknown door phone command type: {hex(self.command_byte)}, packet: {self.packet.hex()}")
-            return None
-    
-    @property
-    def entrance_type(self) -> DoorPhoneEntrance | None:
+    def entrance_type(self) -> DoorPhoneEntrance:
         """Get the entrance type."""
-        try:
-            if self.command_type == DoorPhoneCommand.INVOKE:
-                return DoorPhoneEntrance(self.packet[5])
-            elif self.command_type == DoorPhoneCommand.CONTROL:
-                return DoorPhoneEntrance(self.packet[4])
-            raise ValueError
-        except ValueError as ve:
-            _LOGGER.error(f"Unknown door phone entrance type: {ve}, packet: {self.packet.hex()}")
-            return None
-    
-    @property
-    def event_type(self) -> DoorPhoneEventType | None:
-        """Get the event type."""
-        try:
-            return DoorPhoneEventType(self.packet[15])
-        except ValueError:
-            _LOGGER.error(f"Unknown door phone event type: {hex(self.packet[15])}, packet: {self.packet.hex()}")
-            return None
-    
+        if self.dest == 0x02 and self.src == 0x02:
+            return DoorPhoneEntrance.PRIVATE
+        else:
+            return DoorPhoneEntrance.PUBLIC
+        
     def parse_data(self) -> list[Device]:
         """Parse door phone-specific data."""
         devices: list[Device] = []
-
-        if self.event_type == DoorPhoneEventType.RING:
+        if is_ringing := (self.event == 0x01 and self.event2 == 0x01):
+            _LOGGER.debug(f"Door phone - {self.room_id} ringing at {datetime.now()}")
             self._last_data[self.device_id]["ringing_time"] = datetime.now()
-            self._last_data[self.device_id]["ringing_state"] = True
-        if self.event_type == DoorPhoneEventType.PICKUP:
-            self._last_data[self.device_id]["ringing_state"] = False
         
+        if self._last_data["phone_id"] is None and self.src2 not in {0xFF, 0x31}:
+            self._last_data["phone_id"] = self.src2
+            _LOGGER.debug(f"Door phone - {self.room_id} phone id: {self._last_data['phone_id']:#x}")
+        
+        if self.event == 0x24 and self.event == 0x00:
+            _LOGGER.debug(f"Door phone - {self.room_id} opening at {datetime.now()}")
+            self._phone_opening = False
+        if self.event == 0x04 and self.event2 == 0x00:
+            _LOGGER.debug(f"Door phone - {self.room_id} exiting at {datetime.now()}")
+            self._phone_exiting = False
+
         devices.append(
             Device(
                 device_type=self.device_type,
                 device_id=self.device_id,
                 room_id=self.room_id,
                 state={
-                    STATE: self._last_data[self.device_id]["ringing_state"],
-                    TIME: self._last_data[self.device_id]["ringing_time"]
+                    STATE: is_ringing,
+                    TIME: self._last_data[self.device_id]["ringing_time"],
                 },
                 sub_id=RING,
             )
         )
-
         devices.append(
             Device(
                 device_type=self.device_type,
@@ -883,10 +867,6 @@ class DoorPhonePacket:
                 sub_id=SHUTDOWN,
             )
         )
-        if self.event_type == DoorPhoneEventType.OPEN:
-            self._phone_opening = False
-        elif self.event_type == DoorPhoneEventType.EXIT:
-            self._phone_exiting = False
 
         return devices
     
@@ -894,10 +874,10 @@ class DoorPhonePacket:
         """Make door phone packets."""
         make_packets = []
         base_packet = bytearray([
-            0x79, 0xBC, self.entrance_type.value,
-            0x02, 0x00,
-            (0x31 if self.entrance_type == DoorPhoneEntrance.PRIVATE else 0x00),
-            0xFF, 0xFF, 0xFF, 0x61, 0xFF, 0xFF, 0xFF
+            0x79, 0xBC, self.src, self.dest,
+            0x00, self.src2, 0xFF, 0xFF, 0xFF,
+            self._last_data["phone_id"] or 0x2A,
+            0xFF, 0xFF, 0xFF
         ])
         for cmd, delay in command_packet:
             make_packet = base_packet.copy()
@@ -913,19 +893,22 @@ class DoorPhonePacket:
             _LOGGER.debug(f"Door phone device is off - {control}. Ignoring power status.")
             return
         
+        open_packet = [
+            (bytearray([0x03, 0x00]), 1.0),
+            (bytearray([0x24, 0x00]), 0.1),
+            (bytearray([0x04, 0x00]), 1.0),
+        ]
+        shutdown_packet = [
+            (bytearray([0x03, 0x00]), 1.0),
+            (bytearray([0x04, 0x00]), 1.0),
+        ]
+
         if control == SHUTDOWN:
             self._phone_exiting = True
-            return self.make_door_phone_packets([
-                (bytearray([0x03, 0x00]), 1.0),
-                (bytearray([0x04, 0x00]), 1.0),
-            ])
+            return self.make_door_phone_packets(shutdown_packet)
         else:
             self._phone_opening = True
-            return self.make_door_phone_packets([
-                (bytearray([0x03, 0x00]), 1.0),
-                (bytearray([0x24, 0x00]), 0.1),
-                (bytearray([0x04, 0x00]), 1.0),
-            ])
+            return self.make_door_phone_packets(open_packet)
 
 
 class DoorPhoneParser:
@@ -936,12 +919,12 @@ class DoorPhoneParser:
         """Parse door phone packets."""
         base_packet = DoorPhonePacket(packet)
         
-        if (
-            base_packet.entrance_type is None or
-            base_packet.event_type is None
-        ):
-            _LOGGER.debug(f"Unknown door phone packet: {packet.hex()}")
-            return [base_packet]
+        #if (
+        #    base_packet.entrance_type is None or
+        #    base_packet.event_type is None
+        #):
+        #    _LOGGER.debug(f"Unknown door phone packet: {packet.hex()}")
+        #    return [base_packet]
 
         # Update base packet's last_data if provided
         if last_data:

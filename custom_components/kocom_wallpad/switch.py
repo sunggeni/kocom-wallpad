@@ -13,14 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .pywallpad.const import POWER
-from .pywallpad.enums import DeviceType
-from .pywallpad.packet import (
-    KocomPacket,
-    OutletPacket,
-    GasPacket,
-    EVPacket,
-    DoorPhonePacket,
-)
+from .pywallpad.packet import KocomPacket, DeviceType
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -38,8 +31,7 @@ async def async_setup_entry(
     @callback
     def async_add_switch(packet: KocomPacket) -> None:
         """Add new switch entity."""
-        if isinstance(packet, (OutletPacket, GasPacket, EVPacket, DoorPhonePacket)):
-            async_add_entities([KocomSwitchEntity(gateway, packet)])
+        async_add_entities([KocomSwitchEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.SWITCH):
         async_add_switch(entity)
@@ -61,7 +53,6 @@ class KocomSwitchEntity(KocomEntity, SwitchEntity):
     ) -> None:
         """Initialize the switch."""
         super().__init__(gateway, packet)
-
         if self.packet.device_type == DeviceType.OUTLET:
             self._attr_device_class = SwitchDeviceClass.OUTLET
 

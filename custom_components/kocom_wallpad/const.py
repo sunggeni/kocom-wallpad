@@ -27,7 +27,7 @@ DEFAULT_PORT = 8899
 BRAND_NAME = "Kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.1.0"
+SW_VERSION = "1.1.1"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
@@ -48,3 +48,10 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = {
     EVPacket: Platform.SWITCH,
     DoorPhonePacket: Platform.SWITCH,
 }
+
+PLATFORM_PACKET_TYPE: tuple[type[KocomPacket], ...] = (
+    ThermostatPacket,
+    FanPacket,
+    EVPacket,
+    DoorPhonePacket,
+)

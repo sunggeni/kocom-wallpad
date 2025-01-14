@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from homeassistant.const import CONF_UNIQUE_ID
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity, RestoredExtraData
@@ -49,8 +48,15 @@ class KocomEntity(RestoreEntity):
             DEVICE_TYPE: self.packet._device.device_type,
             ROOM_ID: self.packet._device.room_id,
             SUB_ID: self.packet._device.sub_id,
-            CONF_UNIQUE_ID: self.unique_id,
         }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{BRAND_NAME}_{self.packet._device.device_type}_{self.gateway.host}".lower())},
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+            name=f"{BRAND_NAME} {process_string(self.packet._device.device_type)}",
+            sw_version=SW_VERSION,
+            via_device=(DOMAIN, self.gateway.host),
+        )
 
     @property
     def device_id(self) -> str:
@@ -59,27 +65,13 @@ class KocomEntity(RestoreEntity):
             self.packet._device.device_type,
             self.packet._device.room_id,
             self.packet._device.sub_id
-        )
+        ).lower()
     
     @property
     def device_name(self) -> str:
         """Return the device name."""
         return process_string(self.device_id.replace("_", " "))
     
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return the device information."""
-        return DeviceInfo(
-            identifiers={
-                (DOMAIN, f"{BRAND_NAME}_{self.packet._device.device_type}_{self.gateway.entry.unique_id}".lower())
-            },
-            manufacturer=MANUFACTURER,
-            model=MODEL,
-            name=f"{BRAND_NAME} {process_string(self.packet._device.device_type)}",
-            sw_version=SW_VERSION,
-            via_device=(DOMAIN, self.gateway.entry.unique_id),
-        )
-        
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
@@ -88,7 +80,7 @@ class KocomEntity(RestoreEntity):
     @callback
     def async_handle_packet_update(self, packet: KocomPacket) -> None:
         """Handle packet update."""
-        if self.packet.packet != packet.packet:
+        if self.packet._device.state != packet._device.state:
             self.packet = packet
             self.async_write_ha_state()
 
@@ -116,4 +108,6 @@ class KocomEntity(RestoreEntity):
         self, packet: bytearray | list[tuple[bytearray, float | None]]
     ) -> None:
         """Send a packet to the gateway."""
+        if not packet:
+            return
         return await self.gateway.client.send_packet(packet)

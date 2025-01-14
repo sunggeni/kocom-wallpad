@@ -8,11 +8,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import entity_registry as er, restore_state
 
-from dataclasses import dataclass
-
 from .pywallpad.client import KocomClient, verify_crc
 from .pywallpad.const import (
     ERROR,
+    HOTWATER,
     CO2,
     TEMPERATURE,
     DIRECTION,
@@ -21,17 +20,20 @@ from .pywallpad.const import (
 )
 from .pywallpad.packet import (
     KocomPacket,
-    ThermostatPacket,
-    FanPacket,
-    EVPacket,
-    DoorPhonePacket,
     PacketParser,
     DoorPhoneParser,
 )
 
 from .connection import RS485Connection
 from .util import create_dev_id, decode_base64_to_bytes
-from .const import LOGGER, DOMAIN, PACKET_DATA, LAST_DATA, PLATFORM_MAPPING
+from .const import (
+    LOGGER,
+    DOMAIN,
+    PACKET_DATA,
+    LAST_DATA, 
+    PLATFORM_MAPPING,
+    PLATFORM_PACKET_TYPE,
+)
 
 
 class KocomGateway:
@@ -137,17 +139,18 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        platform_packet_types = (ThermostatPacket, FanPacket, EVPacket, DoorPhonePacket)
-        if isinstance(packet, platform_packet_types) and (sub_id := packet._device.sub_id):
+        if (isinstance(packet, PLATFORM_PACKET_TYPE) and (sub_id := packet._device.sub_id)):
             if ERROR in sub_id:
                 platform = Platform.BINARY_SENSOR
+            elif HOTWATER == sub_id:
+                platform = Platform.SWITCH
             elif CO2 in sub_id:
                 platform = Platform.SENSOR
             elif TEMPERATURE in sub_id:
                 platform = Platform.SENSOR
             elif sub_id in {DIRECTION, FLOOR}:  # EV
                 platform = Platform.SENSOR
-            elif sub_id in RING:  # DoorPhone
+            elif sub_id in RING:                # Door Phone
                 platform = Platform.BINARY_SENSOR
                 
         return platform
