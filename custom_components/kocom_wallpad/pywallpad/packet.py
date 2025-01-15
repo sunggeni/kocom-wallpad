@@ -662,7 +662,7 @@ class EVPacket(KocomPacket):
         self._last_data.update(self._class_last_data)
         self._ev_invoke = False
         self._ev_direction = self.Direction(self.value[0])
-        self._ev_floor = f"{str(self.value[1]):02}"
+        self._ev_floor = f"{self.value[1]:02}"
 
     def parse_data(self) -> list[Device]:
         """Parse EV-specific data."""

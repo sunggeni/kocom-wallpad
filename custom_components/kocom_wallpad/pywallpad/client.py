@@ -163,7 +163,7 @@ class KocomClient:
 
                 except Exception as e:
                     _LOGGER.error(f"Error processing response: {e}", exc_info=True)
-                    await self._handle_retry(queue)     
+                    await self._handle_retry(queue)
         
             except Exception as e:
                 _LOGGER.error(f"Error processing queue: {e}", exc_info=True)
@@ -178,7 +178,7 @@ class KocomClient:
 
         queue.retries += 1
         _LOGGER.debug(f"Retrying command (attempt {queue.retries}): {queue.packet.hex()}")
-        await asyncio.sleep(0.1 * (2 ** queue.retries))
+        await asyncio.sleep(0.12 * (2 ** queue.retries))
         await self.packet_queue.put(queue)
 
     def extract_packets(self, data: bytes) -> list[bytes]:
