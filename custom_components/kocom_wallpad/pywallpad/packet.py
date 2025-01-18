@@ -271,9 +271,9 @@ class ThermostatPacket(KocomPacket):
         super().__init__(packet)
         if self.device_id not in self._class_last_data:
             self._class_last_data[self.device_id] = {
-                "is_hot_water": False,
                 "last_target_temp": 22,
             }
+        self._class_last_data["is_hot_water"] = False
         self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
@@ -290,7 +290,7 @@ class ThermostatPacket(KocomPacket):
         error_code = f"{self.value[6]:02}"
         is_error = error_code != "00"
 
-        if is_on and self._last_data[self.device_id]["last_target_temp"] != target_temp:
+        if is_on and not is_away and self._last_data[self.device_id]["last_target_temp"] != target_temp:
             _LOGGER.debug(f"New target temperature: {target_temp}")
             self._last_data[self.device_id]["last_target_temp"] = target_temp
 
@@ -316,9 +316,9 @@ class ThermostatPacket(KocomPacket):
             )
         )
 
-        #if is_hotwater or self._last_data[self.device_id]["is_hot_water"]:
+        #if is_hotwater or self._last_data["is_hot_water"]:
         #    _LOGGER.debug(f"Hot water: {is_hotwater}")
-        #    self._last_data[self.device_id]["is_hot_water"] = True
+        #    self._last_data["is_hot_water"] = True
         #    devices.append(
         #        Device(
         #            device_type=self.device_name(),

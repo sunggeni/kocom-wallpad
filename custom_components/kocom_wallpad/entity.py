@@ -42,7 +42,7 @@ class KocomEntity(RestoreEntity):
         self.packet = packet
         self.packet_update_signal = f"{DOMAIN}_{self.gateway.host}_{self.device_id}"
         
-        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}:{self.gateway.host}".lower()
+        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}:{self.gateway.host}"
         self._attr_name = f"{BRAND_NAME} {self.device_name}"
         self._attr_extra_state_attributes = {
             DEVICE_TYPE: self.packet._device.device_type,
@@ -50,7 +50,7 @@ class KocomEntity(RestoreEntity):
             SUB_ID: self.packet._device.sub_id,
         }
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{BRAND_NAME}_{self.packet._device.device_type}_{self.gateway.host}".lower())},
+            identifiers={(DOMAIN, f"{BRAND_NAME}_{self.packet._device.device_type}_{self.gateway.host}")},
             manufacturer=MANUFACTURER,
             model=MODEL,
             name=f"{BRAND_NAME} {process_string(self.packet._device.device_type)}",
@@ -65,7 +65,7 @@ class KocomEntity(RestoreEntity):
             self.packet._device.device_type,
             self.packet._device.room_id,
             self.packet._device.sub_id
-        ).lower()
+        )
     
     @property
     def device_name(self) -> str:
