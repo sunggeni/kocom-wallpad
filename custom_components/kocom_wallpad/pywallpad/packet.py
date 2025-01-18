@@ -271,9 +271,9 @@ class ThermostatPacket(KocomPacket):
         super().__init__(packet)
         if self.device_id not in self._class_last_data:
             self._class_last_data[self.device_id] = {
+                "is_hot_water": False,
                 "last_target_temp": 22,
             }
-            self._class_last_data["is_hotwater"] = False
         self._last_data.update(self._class_last_data)
 
     def parse_data(self) -> list[Device]:
@@ -316,9 +316,9 @@ class ThermostatPacket(KocomPacket):
             )
         )
 
-        #if is_hotwater or self._last_data["is_hotwater"]:
+        #if is_hotwater or self._last_data[self.device_id]["is_hot_water"]:
         #    _LOGGER.debug(f"Hot water: {is_hotwater}")
-        #    self._last_data["is_hotwater"] = True
+        #    self._last_data[self.device_id]["is_hot_water"] = True
         #    devices.append(
         #        Device(
         #            device_type=self.device_name(),
@@ -676,6 +676,8 @@ class EVPacket(KocomPacket):
                 state={POWER: self._ev_invoke},
             )
         )
+        self._ev_invoke = False
+
         devices.append(
             Device(
                 device_type=self.device_name(capital=True),
@@ -685,6 +687,9 @@ class EVPacket(KocomPacket):
                 sub_id=DIRECTION,
             )
         )
+
+        if self._ev_direction == self.Direction.ARRIVAL:
+            self._ev_direction = self.Direction.IDLE
 
         if int(self._ev_floor) >> 4 == 0x08:   # 지하 층
             self._ev_floor = f"B{str(int(self._ev_floor) & 0x0F)}"
@@ -703,11 +708,7 @@ class EVPacket(KocomPacket):
                     sub_id=FLOOR,
                 )
             )
-        
-        if self._ev_direction == self.Direction.ARRIVAL:
-            self._ev_invoke = False
-            self._ev_direction = self.Direction.IDLE
-        
+
         return devices
     
     def make_power_status(self, power: bool) -> bytearray:

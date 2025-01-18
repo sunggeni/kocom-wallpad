@@ -42,7 +42,7 @@ class KocomEntity(RestoreEntity):
         self.packet = packet
         self.packet_update_signal = f"{DOMAIN}_{self.gateway.host}_{self.device_id}"
         
-        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}-{self.gateway.host}".lower()
+        self._attr_unique_id = f"{BRAND_NAME}_{self.device_id}:{self.gateway.host}".lower()
         self._attr_name = f"{BRAND_NAME} {self.device_name}"
         self._attr_extra_state_attributes = {
             DEVICE_TYPE: self.packet._device.device_type,
@@ -86,7 +86,6 @@ class KocomEntity(RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
-        await super().async_added_to_hass()
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -94,6 +93,7 @@ class KocomEntity(RestoreEntity):
                 self.async_handle_packet_update
             )
         )
+        await super().async_added_to_hass()
     
     @property
     def extra_restore_state_data(self) -> RestoredExtraData:

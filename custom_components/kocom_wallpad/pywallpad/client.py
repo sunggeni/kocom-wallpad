@@ -44,7 +44,7 @@ class KocomClient:
         self.device_callbacks: list[Callable[[KocomPacket], Awaitable[None]]] = []
         self.packet_queue: asyncio.Queue[PacketQueue] = asyncio.Queue()
         self.last_packet: KocomPacket | None = None
-        self.packet_lock: asyncio.Lock = asyncio.Lock()
+        #self.packet_lock: asyncio.Lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Start the client."""
@@ -108,9 +108,9 @@ class KocomClient:
                     f"{log_message}: {parsed_packet}, {parsed_packet._device}, {parsed_packet._last_data}"
                 )
                 if isinstance(parsed_packet, KocomPacket):
-                    async with self.packet_lock:
+                    #async with self.packet_lock:
                         self.last_packet = parsed_packet
-                        #_LOGGER.debug(f"Updated last packet: {parsed_packet}")
+                    #    _LOGGER.debug(f"Updated last packet: {parsed_packet}")
 
                 if parsed_packet._device is None:
                     continue
@@ -139,20 +139,20 @@ class KocomClient:
                     start_time = time.time()
                     
                     while (time.time() - start_time) < 1.0:
-                        async with self.packet_lock:
-                            if self.last_packet is None:
-                                await asyncio.sleep(0.1)
-                                continue
-
-                            if (self.last_packet.device_id == packet.device_id and
-                                self.last_packet.sequence == packet.sequence and
-                                self.last_packet.dest == packet.src and 
-                                self.last_packet.src == packet.dest):
-                                found_match = True
-                                self.last_packet = None
-                                break
-
+                        #async with self.packet_lock:
+                        if self.last_packet is None:
                             await asyncio.sleep(0.1)
+                            continue
+
+                        if (self.last_packet.device_id == packet.device_id and
+                            self.last_packet.sequence == packet.sequence and
+                            self.last_packet.dest == packet.src and 
+                            self.last_packet.src == packet.dest):
+                            found_match = True
+                            self.last_packet = None
+                            break
+
+                        await asyncio.sleep(0.1)
 
                     if not found_match:
                         _LOGGER.debug("not received ack retrying..")

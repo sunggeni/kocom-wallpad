@@ -123,14 +123,14 @@ class KocomGateway:
         device = packet._device
         dev_id = create_dev_id(device.device_type, device.room_id, device.sub_id)
 
+        packet_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
+        async_dispatcher_send(self.hass, packet_update_signal, packet)
+        
         if dev_id not in self.entities[platform]:
             self.entities[platform][dev_id] = packet
 
             add_signal = f"{DOMAIN}_{platform.value}_add"
             async_dispatcher_send(self.hass, add_signal, packet)
-        
-        packet_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
-        async_dispatcher_send(self.hass, packet_update_signal, packet)
         
     def parse_platform(self, packet: KocomPacket) -> Platform | None:
         """Parse the platform from the packet."""

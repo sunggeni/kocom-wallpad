@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from typing import Optional
+
 import asyncio
+import re
+import serial_asyncio
 
 from .const import LOGGER
 
 
 class RS485Connection:
-    """Connection class for RS485 communication with read lock protection."""
+    """Connection class for RS485 communication with IP or serial support."""
 
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: Optional[int] = None):
         """Initialize the connection."""
         self.host = host
         self.port = port
@@ -19,17 +22,31 @@ class RS485Connection:
         self.reconnect_interval = 5
         self._running = True
 
+    def is_ip_address(self) -> bool:
+        """Check if the host is an IP address."""
+        ip_pattern = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+        return bool(ip_pattern.match(self.host))
+
     async def connect(self) -> bool:
-        """Connect to the device."""
+        """Connect to the device using IP or serial."""
         try:
-            self.reader, self.writer = await asyncio.open_connection(
-                self.host, self.port
-            )
+            if self.is_ip_address():
+                if not self.port:
+                    raise ValueError("Port must be provided for IP connections.")
+                self.reader, self.writer = await asyncio.open_connection(
+                    self.host, self.port
+                )
+                LOGGER.info(f"Connected to {self.host}:{self.port}")
+            else:
+                self.reader, self.writer = await serial_asyncio.open_serial_connection(
+                    url=self.host, baudrate=9600
+                )
+                LOGGER.info(f"Connected to serial port {self.host}")
+            
             self.is_connected = True
-            LOGGER.info(f"Connected to {self.host}:{self.port}")
             return True
         except Exception as e:
-            LOGGER.error(f"Socket connection failed: {e}")
+            LOGGER.error(f"Connection failed: {e}")
             self.is_connected = False
             return False
 
@@ -71,10 +88,10 @@ class RS485Connection:
             return False
 
     async def receive(self) -> Optional[bytes]:
-        """Receive data from the device with read lock protection."""
+        """Receive data from the device."""
         if not self.is_connected or not self.reader:
             return None
-            
+
         try:
             data = await self.reader.read(1024)
             if not data:
@@ -92,7 +109,7 @@ class RS485Connection:
             return None
 
 
-async def test_connection(host: str, port: int, timeout: int = 5) -> bool:
+async def test_connection(host: str, port: Optional[int] = None, timeout: int = 5) -> bool:
     """Test the connection with a timeout."""
     connection = RS485Connection(host, port)
     try:
