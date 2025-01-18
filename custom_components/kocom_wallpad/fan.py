@@ -17,7 +17,6 @@ from homeassistant.util.percentage import (
 )
 
 from .pywallpad.const import POWER, VENT_MODE, FAN_SPEED
-from .pywallpad.enums import VentMode, FanSpeed
 from .pywallpad.packet import KocomPacket, FanPacket
 
 from .gateway import KocomGateway
@@ -57,11 +56,17 @@ class KocomFanEntity(KocomEntity, FanEntity):
         FanEntityFeature.PRESET_MODE
     )
     _attr_speed_count = 3
-    _attr_preset_modes = list(VentMode.__members__.keys())
+    _attr_preset_modes = [
+        FanPacket.VentMode.VENTILATION.name,
+        FanPacket.VentMode.AUTO.name,
+        FanPacket.VentMode.BYPASS.name,
+        FanPacket.VentMode.NIGHT.name,
+        FanPacket.VentMode.AIR_PURIFIER.name,
+    ]
     _attr_speed_list = [
-        FanSpeed.LOW.value,
-        FanSpeed.MEDIUM.value,
-        FanSpeed.HIGH.value,
+        FanPacket.FanSpeed.LOW.value,
+        FanPacket.FanSpeed.MEDIUM.value,
+        FanPacket.FanSpeed.HIGH.value,
     ]
 
     def __init__(
@@ -81,10 +86,10 @@ class KocomFanEntity(KocomEntity, FanEntity):
     def percentage(self) -> int:
         """Return the current speed percentage."""
         fan_speed = self.packet._device.state[FAN_SPEED]
-        if fan_speed == FanSpeed.OFF:
+        if fan_speed == FanPacket.FanSpeed.UNKNOWN:
             return 0
         return ordered_list_item_to_percentage(self._attr_speed_list, fan_speed.value)
-        
+    
     @property
     def preset_mode(self) -> str:
         """Return the current preset mode."""
@@ -93,18 +98,18 @@ class KocomFanEntity(KocomEntity, FanEntity):
     
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed percentage of the fan."""
-        if percentage == 0:
-            fan_speed = FanSpeed.OFF
-        else:
+        if percentage > 0:
             speed_item = percentage_to_ordered_list_item(self._attr_speed_list, percentage)
-            fan_speed = FanSpeed(speed_item)
+            fan_speed = FanPacket.FanSpeed(speed_item)
+        else:
+            fan_speed = FanPacket.FanSpeed.UNKNOWN
 
         make_packet = self.packet.make_fan_speed(fan_speed)
         await self.send_packet(make_packet)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
-        vent_mode = VentMode[preset_mode]
+        vent_mode = FanPacket.VentMode[preset_mode]
         make_packet = self.packet.make_vent_mode(vent_mode)
         await self.send_packet(make_packet)
 

@@ -31,13 +31,7 @@ from .pywallpad.const import (
     HUMIDITY,
     FLOOR,
 )
-from .pywallpad.enums import DeviceType
-from .pywallpad.packet import (
-    KocomPacket,
-    FanPacket,
-    IAQPacket,
-    EVPacket,
-)
+from .pywallpad.packet import KocomPacket, DeviceType
 
 from .gateway import KocomGateway
 from .entity import KocomEntity
@@ -55,8 +49,7 @@ async def async_setup_entry(
     @callback
     def async_add_sensor(packet: KocomPacket) -> None:
         """Add new sensor entity."""
-        if isinstance(packet, (FanPacket, IAQPacket, EVPacket)):
-            async_add_entities([KocomSensorEntity(gateway, packet)])
+        async_add_entities([KocomSensorEntity(gateway, packet)])
     
     for entity in gateway.get_entities(Platform.SENSOR):
         async_add_sensor(entity)
@@ -76,7 +69,6 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(gateway, packet)
-
         if self.packet.device_type != DeviceType.EV:
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -96,7 +88,7 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
             return SensorDeviceClass.PM25
         elif self.packet._device.sub_id == VOC:
             return SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS
-        elif self.packet._device.sub_id == TEMPERATURE:
+        elif TEMPERATURE in self.packet._device.sub_id:
             return SensorDeviceClass.TEMPERATURE
         elif self.packet._device.sub_id == HUMIDITY:
             return SensorDeviceClass.HUMIDITY
@@ -113,10 +105,10 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
             return CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
         elif self.packet._device.sub_id == VOC:
             return CONCENTRATION_PARTS_PER_BILLION
-        elif self.packet._device.sub_id == TEMPERATURE:
+        elif TEMPERATURE in self.packet._device.sub_id:
             return UnitOfTemperature.CELSIUS
         elif self.packet._device.sub_id == HUMIDITY:
             return PERCENTAGE
-        elif self.packet._device.sub_id == FLOOR:
-            return "층"
+        #elif self.packet._device.sub_id == FLOOR:
+        #    return "층"
         return None

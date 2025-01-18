@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .pywallpad.packet import (
+    KocomPacket,
     LightPacket,
     OutletPacket,
     ThermostatPacket,
@@ -12,6 +13,7 @@ from .pywallpad.packet import (
     GasPacket,
     MotionPacket,
     EVPacket,
+    DoorPhonePacket,
 )
 
 from homeassistant.const import Platform
@@ -25,7 +27,7 @@ DEFAULT_PORT = 8899
 BRAND_NAME = "Kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.0.5"
+SW_VERSION = "1.1.3"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
@@ -34,7 +36,7 @@ SUB_ID = "sub_id"
 PACKET_DATA = "packet_data"
 LAST_DATA = "last_data"
 
-PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
+PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = {
     LightPacket: Platform.LIGHT,
     OutletPacket: Platform.SWITCH,
     ThermostatPacket: Platform.CLIMATE,
@@ -44,4 +46,12 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = { # type: ignore
     GasPacket: Platform.SWITCH,
     MotionPacket: Platform.BINARY_SENSOR,
     EVPacket: Platform.SWITCH,
+    DoorPhonePacket: Platform.SWITCH,
 }
+
+PLATFORM_PACKET_TYPE: tuple[type[KocomPacket], ...] = (
+    ThermostatPacket,
+    FanPacket,
+    EVPacket,
+    DoorPhonePacket,
+)

@@ -8,21 +8,32 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import entity_registry as er, restore_state
 
-from dataclasses import dataclass
-
-from .pywallpad.client import KocomClient
-from .pywallpad.const import ERROR, CO2, TEMPERATURE, DIRECTION, FLOOR
+from .pywallpad.client import KocomClient, verify_crc
+from .pywallpad.const import (
+    ERROR,
+    HOTWATER,
+    CO2,
+    TEMPERATURE,
+    DIRECTION,
+    FLOOR,
+    RING,
+)
 from .pywallpad.packet import (
     KocomPacket,
-    ThermostatPacket,
-    FanPacket,
-    EVPacket,
     PacketParser,
+    DoorPhoneParser,
 )
 
-from .connection import Connection
+from .connection import RS485Connection
 from .util import create_dev_id, decode_base64_to_bytes
-from .const import LOGGER, DOMAIN, PACKET_DATA, LAST_DATA, PLATFORM_MAPPING
+from .const import (
+    LOGGER,
+    DOMAIN,
+    PACKET_DATA,
+    LAST_DATA, 
+    PLATFORM_MAPPING,
+    PLATFORM_PACKET_TYPE,
+)
 
 
 class KocomGateway:
@@ -35,7 +46,7 @@ class KocomGateway:
         self.host = entry.data.get(CONF_HOST)
         self.port = entry.data.get(CONF_PORT)
 
-        self.connection = Connection(self.host, self.port)
+        self.connection = RS485Connection(self.host, self.port)
         self.client: KocomClient = KocomClient(self.connection)
         self.entities: dict[Platform, dict[str, KocomPacket]] = {}
     
@@ -43,7 +54,7 @@ class KocomGateway:
         """Connect to the gateway."""
         try:
             await self.connection.connect()
-            return self.connection.is_connected()
+            return self.connection.is_connected
         except Exception as e:
             LOGGER.error(f"Failed to connect to the gateway: {e}")
             return False
@@ -53,7 +64,7 @@ class KocomGateway:
         if self.client:
             await self.client.stop()
         self.entities.clear()
-        await self.connection.close()
+        await self.connection.disconnect()
 
     async def async_start(self) -> None:
         """Start the gateway."""
@@ -83,7 +94,9 @@ class KocomGateway:
         packet = decode_base64_to_bytes(packet_data)
         last_data = state.extra_data.as_dict().get(LAST_DATA)
         LOGGER.debug(f"Last data: {last_data}")
-
+        
+        if verify_crc(packet):
+            return DoorPhoneParser.parse_state(packet, last_data)
         return PacketParser.parse_state(packet, last_data)
     
     async def async_update_entity_registry(self) -> None:
@@ -110,14 +123,14 @@ class KocomGateway:
         device = packet._device
         dev_id = create_dev_id(device.device_type, device.room_id, device.sub_id)
 
+        packet_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
+        async_dispatcher_send(self.hass, packet_update_signal, packet)
+        
         if dev_id not in self.entities[platform]:
             self.entities[platform][dev_id] = packet
 
             add_signal = f"{DOMAIN}_{platform.value}_add"
             async_dispatcher_send(self.hass, add_signal, packet)
-        
-        packet_update_signal = f"{DOMAIN}_{self.host}_{dev_id}"
-        async_dispatcher_send(self.hass, packet_update_signal, packet)
         
     def parse_platform(self, packet: KocomPacket) -> Platform | None:
         """Parse the platform from the packet."""
@@ -126,16 +139,19 @@ class KocomGateway:
             LOGGER.warning(f"Unrecognized platform type: {type(packet).__name__}")
             return None
         
-        platform_packet_types = (ThermostatPacket, FanPacket, EVPacket)
-        if isinstance(packet, platform_packet_types) and (sub_id := packet._device.sub_id):
+        if (isinstance(packet, PLATFORM_PACKET_TYPE) and (sub_id := packet._device.sub_id)):
             if ERROR in sub_id:
                 platform = Platform.BINARY_SENSOR
+            elif HOTWATER == sub_id:
+                platform = Platform.SWITCH
             elif CO2 in sub_id:
                 platform = Platform.SENSOR
             elif TEMPERATURE in sub_id:
                 platform = Platform.SENSOR
             elif sub_id in {DIRECTION, FLOOR}:  # EV
                 platform = Platform.SENSOR
+            elif sub_id in RING:                # Door Phone
+                platform = Platform.BINARY_SENSOR
                 
         return platform
     

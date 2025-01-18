@@ -55,33 +55,47 @@ class KocomLightEntity(KocomEntity, LightEntity):
     ) -> None:
         """Initialize the light."""
         super().__init__(gateway, packet)
-        self.has_brightness = False
-        self.max_brightness = 0
+
+        if self.is_brightness:
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+            self._attr_color_mode = ColorMode.BRIGHTNESS
+    
+    @property
+    def is_brightness(self) -> bool:
+        """Return whether brightness is supported."""
+        return bool(self.packet._last_data[self.packet.device_id]["bri_lv"])
+    
+    @property
+    def max_brightness(self) -> int:
+        """Return the maximum supported brightness."""
+        return len(self.packet._last_data[self.packet.device_id]["bri_lv"]) + 1
 
     @property
     def is_on(self) -> bool:
         """Return true if light is on."""
-        if self.packet._device.state.get(BRIGHTNESS):
-            self.has_brightness = True
+        if self.is_brightness:
             self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
             self._attr_color_mode = ColorMode.BRIGHTNESS
-            self.max_brightness = len(self.packet._device.state[LEVEL]) + 1
 
         return self.packet._device.state[POWER]
     
     @property
     def brightness(self) -> int:
         """Return the brightness of this light between 0..255."""
-        if self.packet._device.state[BRIGHTNESS] not in self.packet._device.state[LEVEL]:
+        brightness = self.packet._device.state.get(BRIGHTNESS, 0)
+        level = self.packet._device.state.get(LEVEL, [])
+
+        if brightness not in level:
             return 255
-        return ((225 // self.max_brightness) * self.packet._device.state[BRIGHTNESS]) + 1
+        return ((225 // self.max_brightness) * brightness) + 1
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
-        if self.has_brightness:
+        if self.is_brightness:
             brightness = int(kwargs.get(ATTR_BRIGHTNESS, 255))
             brightness = ((brightness * 3) // 225) + 1
-            if brightness not in self.packet._device.state[LEVEL]:
+            brightness_level =  self.packet._device.state.get(LEVEL, [])
+            if brightness not in brightness_level:
                 brightness = 255
             make_packet = self.packet.make_brightness_status(brightness)
         else:
