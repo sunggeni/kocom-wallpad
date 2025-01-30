@@ -109,6 +109,4 @@ class KocomSensorEntity(KocomEntity, SensorEntity):
             return UnitOfTemperature.CELSIUS
         elif self.packet._device.sub_id == HUMIDITY:
             return PERCENTAGE
-        #elif self.packet._device.sub_id == FLOOR:
-        #    return "층"
         return None

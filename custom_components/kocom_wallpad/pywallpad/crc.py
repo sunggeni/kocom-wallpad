@@ -41,18 +41,14 @@ def calculate_crc(packet: bytes) -> list[int, int] | None:
 
 def verify_checksum(packet: bytes) -> bool:
     """Verify checksum for a packet."""
-    if len(packet) < 21:
-        return False
-    
-    data_sum = sum(packet[:18])
-    calculated_checksum = (data_sum + 1) % 256
-    return calculated_checksum == packet[18]
+    packet_checksum = packet[-3]
+    data_to_sum = packet[:-3]
+    sum_val = sum(data_to_sum) & 0xFF
+    calc_checksum = (sum_val + 1) & 0xFF
+    return (calc_checksum == packet_checksum)
 
 def calculate_checksum(packet: bytes) -> int | None:
     """Calculate checksum for a packet."""
-    if len(packet) < 17:
-        return None
-    
-    data_sum = sum(packet)
-    checksum = (data_sum + 1) % 256
+    sum_val = sum(packet) & 0xFF    
+    checksum = (sum_val + 1) & 0xFF
     return checksum

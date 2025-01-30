@@ -16,9 +16,10 @@ class DeviceType(IntEnum):
     AC = 0x39
     OUTLET = 0x3B
     EV = 0x44
-    FAN = 0x48
+    VENT = 0x48
     MOTION = 0x60
     IGNORE = 0x86
+    IGNORE_2 = 0x90
     IAQ = 0x98
 
 class Command(IntEnum):

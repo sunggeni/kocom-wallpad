@@ -8,7 +8,7 @@ from .pywallpad.packet import (
     OutletPacket,
     ThermostatPacket,
     ACPacket,
-    FanPacket,
+    VentPacket,
     IAQPacket,
     GasPacket,
     MotionPacket,
@@ -27,7 +27,7 @@ DEFAULT_PORT = 8899
 BRAND_NAME = "Kocom"
 MANUFACTURER = "KOCOM Co., Ltd"
 MODEL = "Smart Wallpad"
-SW_VERSION = "1.1.3"
+SW_VERSION = "1.1.4"
 
 DEVICE_TYPE = "device_type"
 ROOM_ID = "room_id"
@@ -41,7 +41,7 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = {
     OutletPacket: Platform.SWITCH,
     ThermostatPacket: Platform.CLIMATE,
     ACPacket: Platform.CLIMATE,
-    FanPacket: Platform.FAN,
+    VentPacket: Platform.FAN,
     IAQPacket: Platform.SENSOR,
     GasPacket: Platform.SWITCH,
     MotionPacket: Platform.BINARY_SENSOR,
@@ -51,7 +51,7 @@ PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = {
 
 PLATFORM_PACKET_TYPE: tuple[type[KocomPacket], ...] = (
     ThermostatPacket,
-    FanPacket,
+    VentPacket,
     EVPacket,
     DoorPhonePacket,
 )

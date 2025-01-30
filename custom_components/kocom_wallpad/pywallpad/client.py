@@ -1,5 +1,3 @@
-"""Client for py wallpad."""
-
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +19,6 @@ from .packet import (
 )
 from .const import _LOGGER, PREFIX_HEADER, SUFFIX_HEADER
 
-
 @dataclass
 class PacketQueue:
     """A queue of packets to be sent."""
@@ -36,7 +33,6 @@ class KocomClient:
         """Initialize the KocomClient."""
         self.connection = connection
         self.packet_length = 21
-        self.max_buffer_size = 4096
         self.buffer = bytes()
         self.max_retries = 4
 
@@ -44,7 +40,6 @@ class KocomClient:
         self.device_callbacks: list[Callable[[KocomPacket], Awaitable[None]]] = []
         self.packet_queue: asyncio.Queue[PacketQueue] = asyncio.Queue()
         self.last_packet: KocomPacket | None = None
-        #self.packet_lock: asyncio.Lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Start the client."""
@@ -71,23 +66,23 @@ class KocomClient:
         while True:
             try:
                 if not self.connection.is_connected:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.05)
                     continue
 
                 receive_data = await self.connection.receive()
                 if not receive_data:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.05)
                     continue
 
                 for packet in self.extract_packets(receive_data):
                     await self._process_packet(packet)
-                    
+
             except ValueError as ve:
                 _LOGGER.error(f"Error processing packet: {ve}", exc_info=True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
             except Exception as e:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
     async def _process_packet(self, packet: bytes) -> None:
         """Process a single packet."""
@@ -108,10 +103,8 @@ class KocomClient:
                     f"{log_message}: {parsed_packet}, {parsed_packet._device}, {parsed_packet._last_data}"
                 )
                 if isinstance(parsed_packet, KocomPacket):
-                    #async with self.packet_lock:
-                        self.last_packet = parsed_packet
-                    #    _LOGGER.debug(f"Updated last packet: {parsed_packet}")
-
+                    self.last_packet = parsed_packet
+                    
                 if parsed_packet._device is None:
                     continue
 
@@ -129,30 +122,31 @@ class KocomClient:
                 _LOGGER.debug(f"Sending packet: {queue.packet.hex()}")
                 await self.connection.send(queue.packet)
 
-                if verify_crc(queue.packet):
+                if verify_crc(queue.packet) or (
+                    self.last_packet and self.last_packet._device is None
+                ):
                     self.packet_queue.task_done()
                     continue
 
                 try:
-                    packet = KocomPacket(queue.packet)
+                    packet = PacketParser.parse_state(queue.packet)
                     found_match = False
                     start_time = time.time()
-                    
-                    while (time.time() - start_time) < 1.0:
-                        #async with self.packet_lock:
+
+                    while (time.time() - start_time) < 0.5:
                         if self.last_packet is None:
-                            await asyncio.sleep(0.1)
+                            await asyncio.sleep(0.01)
                             continue
 
-                        if (self.last_packet.device_id == packet.device_id and
-                            self.last_packet.sequence == packet.sequence and
-                            self.last_packet.dest == packet.src and 
-                            self.last_packet.src == packet.dest):
-                            found_match = True
-                            self.last_packet = None
-                            break
+                        for p in packet:
+                            if (self.last_packet._device == p._device):
+                                found_match = True
+                                self.last_packet = None
+                                break
 
-                        await asyncio.sleep(0.1)
+                        if found_match:
+                            break
+                        await asyncio.sleep(0.01)
 
                     if not found_match:
                         _LOGGER.debug("not received ack retrying..")
@@ -164,10 +158,10 @@ class KocomClient:
                 except Exception as e:
                     _LOGGER.error(f"Error processing response: {e}", exc_info=True)
                     await self._handle_retry(queue)
-        
+
             except Exception as e:
                 _LOGGER.error(f"Error processing queue: {e}", exc_info=True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
     async def _handle_retry(self, queue: PacketQueue) -> None:
         """Handle command retry."""
@@ -178,7 +172,7 @@ class KocomClient:
 
         queue.retries += 1
         _LOGGER.debug(f"Retrying command (attempt {queue.retries}): {queue.packet.hex()}")
-        await asyncio.sleep(0.12 * (2 ** queue.retries))
+        await asyncio.sleep(0.1 * (2 ** queue.retries))
         await self.packet_queue.put(queue)
 
     def extract_packets(self, data: bytes) -> list[bytes]:
@@ -192,23 +186,14 @@ class KocomClient:
                 self.buffer = bytes()
                 break
 
-            if start_pos > 0:
-                self.buffer = self.buffer[start_pos:]
-
-            if len(self.buffer) < self.packet_length:
-                break
-
-            if self.buffer[self.packet_length - 2:self.packet_length] != SUFFIX_HEADER:
-                self.buffer = self.buffer[2:]
+            end_pos = self.buffer.find(SUFFIX_HEADER, start_pos + self.packet_length - 2)
+            if end_pos == -1 or (end_pos - start_pos + 2) != self.packet_length:
+                self.buffer = self.buffer[start_pos + 1:]
                 continue
 
-            packet = self.buffer[:self.packet_length]
+            packet = self.buffer[start_pos:end_pos + 2]
             packets.append(packet)
-
-            self.buffer = self.buffer[self.packet_length:]
-
-        if len(self.buffer) > self.max_buffer_size:
-            self.buffer = self.buffer[-self.max_buffer_size:]
+            self.buffer = self.buffer[end_pos + 2:]
 
         return packets
 
@@ -223,7 +208,7 @@ class KocomClient:
                 if (crc := calculate_crc(p)) is None:
                     _LOGGER.error(f"Failed to calculate checksum for packet: {p.hex()}")
                     continue
-                
+
                 p.extend(crc)
                 p.extend(SUFFIX_HEADER)
 
@@ -238,13 +223,13 @@ class KocomClient:
             if (sum := calculate_checksum(packet)) is None:
                 _LOGGER.error(f"Failed to calculate checksum for packet: {packet.hex()}")
                 return
-            
+
             packet.append(sum)
             packet.extend(SUFFIX_HEADER)
 
             if not verify_checksum(packet):
                 _LOGGER.error(f"Failed to verify checksum for packet: {packet.hex()}")
                 return
-        
+
             queue = PacketQueue(packet=packet)
             await self.packet_queue.put(queue)

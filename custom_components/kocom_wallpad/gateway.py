@@ -148,10 +148,9 @@ class KocomGateway:
                 platform = Platform.SENSOR
             elif TEMPERATURE in sub_id:
                 platform = Platform.SENSOR
-            elif sub_id in {DIRECTION, FLOOR}:  # EV
+            elif sub_id in {DIRECTION, FLOOR}:
                 platform = Platform.SENSOR
-            elif sub_id in RING:                # Door Phone
+            elif sub_id in RING:
                 platform = Platform.BINARY_SENSOR
                 
         return platform
-    

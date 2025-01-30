@@ -93,7 +93,7 @@ class RS485Connection:
             return None
 
         try:
-            data = await self.reader.read(1024)
+            data = await self.reader.read(512)
             if not data:
                 LOGGER.warning("Connection closed by peer")
                 self.is_connected = False
