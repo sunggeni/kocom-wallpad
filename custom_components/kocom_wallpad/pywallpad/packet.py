@@ -684,6 +684,7 @@ class EVPacket(KocomPacket):
             )
         )
 
+        is_floor = False
         if (
             int(self._ev_floor) > 0 or
             (is_floor := (int(self._ev_floor) >> 4 == 0x08)) or
