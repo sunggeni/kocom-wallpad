@@ -180,20 +180,23 @@ class KocomClient:
         self.buffer += data
         packets: list[bytes] = []
 
-        while len(self.buffer) >= self.packet_length:
+        while True:
             start_pos = self.buffer.find(PREFIX_HEADER)
             if start_pos == -1:
-                self.buffer = bytes()
                 break
 
-            end_pos = self.buffer.find(SUFFIX_HEADER, start_pos + self.packet_length - 2)
-            if end_pos == -1 or (end_pos - start_pos + 2) != self.packet_length:
-                self.buffer = self.buffer[start_pos + 1:]
-                continue
+            end_pos = self.buffer.find(SUFFIX_HEADER, start_pos + len(PREFIX_HEADER))
+            if end_pos == -1:
+                break
 
-            packet = self.buffer[start_pos:end_pos + 2]
+            end_pos += len(SUFFIX_HEADER)
+            packet = self.buffer[start_pos:end_pos]
+
+            if len(packet) < self.packet_length:
+                break
+
             packets.append(packet)
-            self.buffer = self.buffer[end_pos + 2:]
+            self.buffer = self.buffer[end_pos:]
 
         return packets
 

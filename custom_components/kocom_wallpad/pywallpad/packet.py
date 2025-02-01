@@ -665,15 +665,14 @@ class EVPacket(KocomPacket):
         """Parse EV-specific data."""
         devices: list[Device] = []
 
-        if self.packet_type == PacketType.RECV:
-            devices.append(
-                Device(
-                    device_type=self.device_name(capital=True),
-                    room_id=self.room_id,
-                    device_id=self.device_id,
-                    state={POWER: False},
-                )
+        devices.append(
+            Device(
+                device_type=self.device_name(capital=True),
+                room_id=self.room_id,
+                device_id=self.device_id,
+                state={POWER: False},
             )
+        )
         devices.append(
             Device(
                 device_type=self.device_name(capital=True),
@@ -684,15 +683,13 @@ class EVPacket(KocomPacket):
             )
         )
 
-        is_floor = False
         if (
             int(self._ev_floor) > 0 or
-            (is_floor := (int(self._ev_floor) >> 4 == 0x08)) or
             self._last_data[self.device_id]["avil_floor"]
         ):
-            if is_floor:
+            if int(self._ev_floor) >> 4 == 0x08:
                 self._ev_floor = f"B{str(int(self._ev_floor) & 0x0F)}"
-                
+
             self._last_data[self.device_id]["avil_floor"] = True
             self._last_data[self.device_id]["last_floor"] = self._ev_floor
             
@@ -828,8 +825,8 @@ class DoorPhonePacket:
     
         self._last_data[self.device_id].update({
             "ringing_time": None,
+            "phone_id": None,
         })
-        self._last_data["phone_id"] = None
 
     def __repr__(self) -> str:
         """Return a string representation of the DoorPhonePacket."""
@@ -851,9 +848,9 @@ class DoorPhonePacket:
             _LOGGER.debug(f"Door phone - {self.room_id} ringing at {datetime.now()}")
             self._last_data[self.device_id]["ringing_time"] = datetime.now()
         
-        if self._last_data["phone_id"] is None and self.src2 not in {0xFF, 0x31}:
-            self._last_data["phone_id"] = self.src2
-            _LOGGER.debug(f"Door phone - {self.room_id} phone id: {self._last_data['phone_id']:#x}")
+        if self._last_data[self.device_id]["phone_id"] is None and self.src2 not in {0xFF, 0x31}:
+            self._last_data[self.device_id]["phone_id"] = self.src2
+            _LOGGER.debug(f"Door phone - {self.room_id} phone id: {self._last_data[self.device_id]['phone_id']:#x}")
         
         if self.event == 0x24 and self.event == 0x00:
             _LOGGER.debug(f"Door phone - {self.room_id} opening at {datetime.now()}")
@@ -915,7 +912,7 @@ class DoorPhonePacket:
         base_packet = bytearray([
             0x79, 0xBC, self.src, self.dest,
             0x00, self.src2, 0xFF, 0xFF, 0xFF,
-            self._last_data["phone_id"] or 0x2A,
+            self._last_data[self.device_id]["phone_id"] or 0x2A,
             0xFF, 0xFF, 0xFF
         ])
         for cmd, delay in command_packet:
