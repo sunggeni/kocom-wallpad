@@ -78,12 +78,12 @@ class KocomPacket:
 
     def __repr__(self) -> str:
         """Return a string representation of the packet."""
-        return f"KocomPacket(packet_type={self.packet_type.name}, seq_number={self.seq_number:#X}, dest={self.dest.hex()}, src={self.src.hex()}, command={self.command.name}, payload={self.payload.hex()}, checksum={self.checksum:#X})"
+        return f"KocomPacket(packet_type={self.packet_type.name}, seq_number={self.seq_number:#x}, dest={self.dest.hex()}, src={self.src.hex()}, command={self.command.name}, payload={self.payload.hex()}, checksum={self.checksum:#x})"
     
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
-        if self._address[0] == DeviceType.WALLPAD.value:
+        if self._address[0] == bytes([0x01]):
             self._address = self.dest
         return DeviceType(self._address[0])
     
@@ -727,12 +727,10 @@ class PacketParser:
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
         """Parse a raw packet into a specific packet class."""
-        device_type = None
-
-        if packet_data[5] == DeviceType.WALLPAD.value:
-            device_type = packet_data[7]
-        elif packet_data[7] == DeviceType.WALLPAD.value:
+        if packet_data[7] == bytes([0x01, 0x00]):
             device_type = packet_data[5]
+        else:
+            device_type = packet_data[7]
         return PacketParser._get_packet_instance(device_type, packet_data)
 
     @staticmethod
@@ -746,9 +744,7 @@ class PacketParser:
         if (
             (base_packet.packet_type == PacketType.RECV and
             base_packet.command == Command.SCAN) or 
-            base_packet.device_type in (
-                DeviceType.WALLPAD, DeviceType.IGNORE, DeviceType.IGNORE_2
-            )
+            base_packet.device_type in {0x01, 0x90}
         ):
             return [base_packet]
 
@@ -770,7 +766,7 @@ class PacketParser:
         return parsed_packets
 
     @staticmethod
-    def _get_packet_instance(device_type: int | None, packet_data: bytes) -> KocomPacket:
+    def _get_packet_instance(device_type: int, packet_data: bytes) -> KocomPacket:
         """Retrieve the appropriate packet class based on device type."""
         device_class_map = {
             DeviceType.LIGHT.value: LightPacket,
@@ -783,16 +779,11 @@ class PacketParser:
             DeviceType.MOTION.value: MotionPacket,
             DeviceType.EV.value: EVPacket,
             DeviceType.WALLPAD.value: KocomPacket,
-            DeviceType.IGNORE.value: KocomPacket,
-            DeviceType.IGNORE_2.value: KocomPacket,
         }
-        if device_type is None:
-            _LOGGER.warning(f"Device type not found in packet: {packet_data.hex()}")
-            return None
-        
         packet_class = device_class_map.get(device_type)
-        if packet_class is None:
-            _LOGGER.warning(f"Unknown device type: {device_type:#X}, packet: {packet_data.hex()}")
+
+        if packet_class is None and not device_type in {0x01, 0x90}:
+            _LOGGER.warning(f"Unknown device type: {device_type:#x}, packet: {packet_data.hex()}")
             return None
 
         return packet_class(packet_data)

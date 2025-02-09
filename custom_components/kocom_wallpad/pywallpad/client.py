@@ -32,8 +32,7 @@ class KocomClient:
     def __init__(self, connection: RS485Connection) -> None:
         """Initialize the KocomClient."""
         self.connection = connection
-        self.packet_length = 21
-        self.buffer = bytes()
+        self.prev_data = b""
         self.max_retries = 4
 
         self.tasks: list[asyncio.Task] = []
@@ -73,10 +72,12 @@ class KocomClient:
                 if not receive_data:
                     await asyncio.sleep(0.05)
                     continue
-
-                for packet in self.extract_packets(receive_data):
+                    
+                if len(self.prev_data) > 0 and self.prev_data.endswith(bytes([0x0D, 0x0D])):
                     await self._process_packet(packet)
-
+                    self.prev_data = b""
+                else:
+                    self.prev_data += receive_data
             except ValueError as ve:
                 _LOGGER.error(f"Error processing packet: {ve}", exc_info=True)
                 await asyncio.sleep(0.5)
@@ -139,7 +140,7 @@ class KocomClient:
                             continue
 
                         for p in packet:
-                            if (self.last_packet._device == p._device):
+                            if self.last_packet._device == p._device:
                                 found_match = True
                                 self.last_packet = None
                                 break
@@ -174,31 +175,6 @@ class KocomClient:
         _LOGGER.debug(f"Retrying command (attempt {queue.retries}): {queue.packet.hex()}")
         await asyncio.sleep(0.1 * (2 ** queue.retries))
         await self.packet_queue.put(queue)
-
-    def extract_packets(self, data: bytes) -> list[bytes]:
-        """Extract packets from the received data."""
-        self.buffer += data
-        packets: list[bytes] = []
-
-        while True:
-            start_pos = self.buffer.find(PREFIX_HEADER)
-            if start_pos == -1:
-                break
-
-            end_pos = self.buffer.find(SUFFIX_HEADER, start_pos + len(PREFIX_HEADER))
-            if end_pos == -1:
-                break
-
-            end_pos += len(SUFFIX_HEADER)
-            packet = self.buffer[start_pos:end_pos]
-
-            if len(packet) < self.packet_length:
-                break
-
-            packets.append(packet)
-            self.buffer = self.buffer[end_pos:]
-
-        return packets
 
     async def send_packet(self, packet: bytearray | list[tuple[bytearray, float | None]]) -> None:
         """Send a packet to the device."""

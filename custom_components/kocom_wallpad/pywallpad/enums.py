@@ -18,8 +18,6 @@ class DeviceType(IntEnum):
     EV = 0x44
     VENT = 0x48
     MOTION = 0x60
-    IGNORE = 0x86
-    IGNORE_2 = 0x90
     IAQ = 0x98
 
 class Command(IntEnum):
