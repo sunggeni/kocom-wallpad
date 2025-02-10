@@ -83,7 +83,7 @@ class KocomPacket:
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
-        if self._address[0] == bytes([0x01]):
+        if self._address[0] == DeviceType.WALLPAD.value:
             self._address = self.dest
         return DeviceType(self._address[0])
     
@@ -727,7 +727,7 @@ class PacketParser:
     @staticmethod
     def parse(packet_data: bytes) -> KocomPacket:
         """Parse a raw packet into a specific packet class."""
-        if packet_data[7] == bytes([0x01, 0x00]):
+        if packet_data[7] == DeviceType.WALLPAD.value:
             device_type = packet_data[5]
         else:
             device_type = packet_data[7]
@@ -744,7 +744,7 @@ class PacketParser:
         if (
             (base_packet.packet_type == PacketType.RECV and
             base_packet.command == Command.SCAN) or 
-            base_packet.device_type in {0x01, 0x90}
+            base_packet.device_type == DeviceType.WALLPAD
         ):
             return [base_packet]
 
@@ -782,7 +782,7 @@ class PacketParser:
         }
         packet_class = device_class_map.get(device_type)
 
-        if packet_class is None and not device_type in {0x01, 0x90}:
+        if packet_class is None:
             _LOGGER.warning(f"Unknown device type: {device_type:#x}, packet: {packet_data.hex()}")
             return None
 

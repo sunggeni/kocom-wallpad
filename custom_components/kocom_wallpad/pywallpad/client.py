@@ -73,8 +73,12 @@ class KocomClient:
                     await asyncio.sleep(0.05)
                     continue
                     
-                if len(self.prev_data) > 0 and self.prev_data.endswith(bytes([0x0D, 0x0D])):
-                    await self._process_packet(packet)
+                if (
+                    self.prev_data.startswith(bytes([0xAA, 0x55])) and
+                    self.prev_data.endswith(bytes([0x0D, 0x0D])) and
+                    len(self.prev_data) == 21
+                ):
+                    await self._process_packet(self.prev_data)
                     self.prev_data = b""
                 else:
                     self.prev_data += receive_data
