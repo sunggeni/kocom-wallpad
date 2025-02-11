@@ -85,6 +85,7 @@ class KocomClient:
                 await asyncio.sleep(0.5)
 
     def parse_packets(self, data: bytes) -> list[bytes]:
+        """Extract 21-byte packets with specific start/end markers."""
         packets = []
 
         for byte in data:
