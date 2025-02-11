@@ -98,7 +98,7 @@ class RS485Connection:
                 LOGGER.warning("Connection closed by peer")
                 self.is_connected = False
                 return None
-            return data[0] if isinstance(data, list) else data
+            return data
         except ConnectionResetError:
             LOGGER.error("Connection reset while receiving")
             self.is_connected = False
