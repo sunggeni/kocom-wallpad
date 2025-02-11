@@ -19,6 +19,7 @@ from .packet import (
 )
 from .const import _LOGGER, PREFIX_HEADER, SUFFIX_HEADER
 
+
 @dataclass
 class PacketQueue:
     """A queue of packets to be sent."""
@@ -32,7 +33,7 @@ class KocomClient:
     def __init__(self, connection: RS485Connection) -> None:
         """Initialize the KocomClient."""
         self.connection = connection
-        self.prev_data = b""
+        self.buffer = b""
         self.max_retries = 4
 
         self.tasks: list[asyncio.Task] = []
@@ -72,22 +73,34 @@ class KocomClient:
                 if not receive_data:
                     await asyncio.sleep(0.05)
                     continue
-                    
-                if (
-                    self.prev_data.startswith(bytes([0xAA, 0x55])) and
-                    self.prev_data.endswith(bytes([0x0D, 0x0D])) and
-                    len(self.prev_data) == 21
-                ):
-                    await self._process_packet(self.prev_data)
-                    self.prev_data = b""
-                else:
-                    self.prev_data += receive_data
+
+                packets = self.parse_packets(receive_data)
+                for packet in packets:
+                    await self._process_packet(packet)
             except ValueError as ve:
                 _LOGGER.error(f"Error processing packet: {ve}", exc_info=True)
                 await asyncio.sleep(0.5)
             except Exception as e:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
                 await asyncio.sleep(0.5)
+
+    def parse_packets(self, data: bytes) -> list[bytes]:
+        packets = []
+
+        for byte in data:
+            self.buffer += bytes([byte])
+
+            if len(self.buffer) < 21:
+                continue
+
+            if self.buffer[:2] == b"\xAA\x55" and self.buffer[-2:] == b"\x0D\x0D" and len(self.buffer) == 21:
+                packets.append(self.buffer)
+                self.buffer = b""
+            
+            elif len(self.buffer) > 21:
+                self.buffer = self.buffer[1:]
+
+        return packets
 
     async def _process_packet(self, packet: bytes) -> None:
         """Process a single packet."""
@@ -109,7 +122,7 @@ class KocomClient:
                 )
                 if isinstance(parsed_packet, KocomPacket):
                     self.last_packet = parsed_packet
-                    
+
                 if parsed_packet._device is None:
                     continue
 
@@ -154,7 +167,7 @@ class KocomClient:
                         await asyncio.sleep(0.01)
 
                     if not found_match:
-                        _LOGGER.debug("not received ack retrying..")
+                        _LOGGER.debug("Not received ACK, retrying...")
                         await self._handle_retry(queue)
                     else:
                         _LOGGER.debug(f"Command success: {queue.packet.hex()}")
