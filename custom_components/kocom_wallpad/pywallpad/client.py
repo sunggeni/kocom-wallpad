@@ -33,8 +33,9 @@ class KocomClient:
     def __init__(self, connection: RS485Connection) -> None:
         """Initialize the KocomClient."""
         self.connection = connection
-        self.buffer = b""
-        self.max_retries = 4
+        self.max_retries: int = 4
+        self.packet: bytes = bytes()
+        self.packet_flag: bool = False
 
         self.tasks: list[asyncio.Task] = []
         self.device_callbacks: list[Callable[[KocomPacket], Awaitable[None]]] = []
@@ -74,9 +75,7 @@ class KocomClient:
                     await asyncio.sleep(0.05)
                     continue
 
-                packets = self.parse_packets(receive_data)
-                for packet in packets:
-                    await self._process_packet(packet)
+                await self.parse_packet(receive_data)
             except ValueError as ve:
                 _LOGGER.error(f"Error processing packet: {ve}", exc_info=True)
                 await asyncio.sleep(0.5)
@@ -84,24 +83,16 @@ class KocomClient:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
                 await asyncio.sleep(0.5)
 
-    def parse_packets(self, data: bytes) -> list[bytes]:
-        """Extract 21-byte packets with specific start/end markers."""
-        packets = []
-
-        for byte in data:
-            self.buffer += bytes([byte])
-
-            if len(self.buffer) < 21:
-                continue
-
-            if self.buffer[:2] == b"\xAA\x55" and self.buffer[-2:] == b"\x0D\x0D" and len(self.buffer) == 21:
-                packets.append(self.buffer)
-                self.buffer = b""
+    async def parse_packet(self, data: bytes) -> None:
+        if data == b'\xAA':
+            self.packet_flag = True
+        if self.packet_flag:
+            self.packet += data
             
-            elif len(self.buffer) > 21:
-                self.buffer = self.buffer[1:]
-
-        return packets
+        if len(self.packet) >= 21:
+            await self._process_packet(self.packet)
+            self.packet = bytes()
+            self.packet_flag = False
 
     async def _process_packet(self, packet: bytes) -> None:
         """Process a single packet."""
