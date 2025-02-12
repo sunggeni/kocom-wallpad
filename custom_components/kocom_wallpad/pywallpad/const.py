@@ -4,8 +4,8 @@ import logging
 
 _LOGGER = logging.getLogger(__package__)
 
-PREFIX_HEADER = b"\xaaU"  # 0xAA 0x55
-SUFFIX_HEADER = b"\r\r"   # 0x0D 0x0D
+HEADER = b"\xAA\x55"  # 0xAA 0x55
+TAILER = b"\x0D\x0D"  # 0x0D 0x0D
 
 POWER = "power"
 BRIGHTNESS = "brightness"

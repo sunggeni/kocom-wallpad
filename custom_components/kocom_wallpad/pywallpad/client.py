@@ -17,7 +17,7 @@ from .packet import (
     PacketParser,
     DoorPhoneParser,
 )
-from .const import _LOGGER, PREFIX_HEADER, SUFFIX_HEADER
+from .const import _LOGGER, HEADER, TAILER
 
 
 @dataclass
@@ -34,8 +34,7 @@ class KocomClient:
         """Initialize the KocomClient."""
         self.connection = connection
         self.max_retries: int = 4
-        self.packet: bytes = bytes()
-        self.packet_flag: bool = False
+        self.packets: bytes = bytes()
 
         self.tasks: list[asyncio.Task] = []
         self.device_callbacks: list[Callable[[KocomPacket], Awaitable[None]]] = []
@@ -75,7 +74,9 @@ class KocomClient:
                     await asyncio.sleep(0.05)
                     continue
 
-                await self.parse_packet(receive_data)
+                packets = self.parse_packets(receive_data)
+                for packet in packets:
+                    await self._process_packet(packet)
             except ValueError as ve:
                 _LOGGER.error(f"Error processing packet: {ve}", exc_info=True)
                 await asyncio.sleep(0.5)
@@ -83,16 +84,22 @@ class KocomClient:
                 _LOGGER.error(f"Error receiving data: {e}", exc_info=True)
                 await asyncio.sleep(0.5)
 
-    async def parse_packet(self, data: bytes) -> None:
-        if data == b'\xAA':
-            self.packet_flag = True
-        if self.packet_flag:
-            self.packet += data
-            
-        if len(self.packet) >= 21:
-            await self._process_packet(self.packet)
-            self.packet = bytes()
-            self.packet_flag = False
+    def parse_packets(self, data: bytes) -> list[bytes]:
+        """Extract 21-byte packets with specific start/end markers."""
+        packets: list[bytes] = []
+
+        for byte in data:
+            self.packets += bytes([byte])
+            if len(self.packets) < 21:
+                continue
+
+            if self.packets[:2] == HEADER and self.packets[-2:] == TAILER:
+                packets.append(self.packets)
+                self.packets = bytes()
+            elif len(self.packets) > 21:
+                self.packets = self.packets[1:]
+
+        return packets
 
     async def _process_packet(self, packet: bytes) -> None:
         """Process a single packet."""
