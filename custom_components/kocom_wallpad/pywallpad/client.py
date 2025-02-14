@@ -199,13 +199,13 @@ class KocomClient:
                 if delay is not None:
                     await asyncio.sleep(delay)
 
-                p[:0] = PREFIX_HEADER
+                p[:0] = HEADER
                 if (crc := calculate_crc(p)) is None:
                     _LOGGER.error(f"Failed to calculate checksum for packet: {p.hex()}")
                     continue
 
                 p.extend(crc)
-                p.extend(SUFFIX_HEADER)
+                p.extend(TAILER)
 
                 if not verify_crc(p):
                     _LOGGER.error(f"Failed to verify checksum for packet: {p.hex()}")
@@ -214,13 +214,13 @@ class KocomClient:
                 queue = PacketQueue(packet=p)
                 await self.packet_queue.put(queue)
         else:
-            packet[:0] = PREFIX_HEADER
+            packet[:0] = HEADER
             if (sum := calculate_checksum(packet)) is None:
                 _LOGGER.error(f"Failed to calculate checksum for packet: {packet.hex()}")
                 return
 
             packet.append(sum)
-            packet.extend(SUFFIX_HEADER)
+            packet.extend(TAILER)
 
             if not verify_checksum(packet):
                 _LOGGER.error(f"Failed to verify checksum for packet: {packet.hex()}")
