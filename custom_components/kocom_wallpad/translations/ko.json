@@ -5,7 +5,7 @@
             "user": {
                 "description": "장치의 주소와 포트를 입력하세요.",
                 "data": {
-                    "host": "호스트",
+                    "host": "/dev/ttyUSB0",
                     "port": "포트"
                 },
                 "data_description": {
