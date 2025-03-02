@@ -37,13 +37,9 @@ PACKET_DATA = "packet_data"
 LAST_DATA = "last_data"
 
 PLATFORM_MAPPING: dict[type[KocomPacket], Platform] = {
-    LightPacket: Platform.LIGHT,
-    OutletPacket: Platform.SWITCH,
     ThermostatPacket: Platform.CLIMATE,
-    ACPacket: Platform.CLIMATE,
     VentPacket: Platform.FAN,
     IAQPacket: Platform.SENSOR,
-    GasPacket: Platform.SWITCH,
     MotionPacket: Platform.BINARY_SENSOR,
     EVPacket: Platform.SWITCH,
     DoorPhonePacket: Platform.SWITCH,
