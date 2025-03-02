@@ -5,7 +5,7 @@
             "user": {
                 "description": "Enter the device's address and port.",
                 "data": {
-                    "host": "Host",
+                    "host": "/dev/ttyUSB0",
                     "port": "Port"
                 },
                 "data_description": {
